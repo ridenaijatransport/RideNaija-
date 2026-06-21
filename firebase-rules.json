@@ -1,0 +1,35 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "bookings": {
+      ".read": true,
+      ".write": true,
+      ".indexOn": ["restaurantName", "source", "rideStatus", "phone"]
+    },
+    "riders":                    { ".read": true, ".write": true },
+    "rider_applications":        { ".read": true, ".write": true },
+    "dedicated_bookings":        { ".read": true, ".write": true },
+    "sub_history":               { ".read": true, ".write": true },
+    "rider_pay_history":         { ".read": true, ".write": true },
+    "withdrawals":               { ".read": true, ".write": true },
+    "company_riders":            { ".read": true, ".write": true },
+    "company_cash_remittances":  { ".read": true, ".write": true },
+    "company_card_payments":     { ".read": true, ".write": true },
+    "fleet_ded_payments":        { ".read": true, ".write": true },
+    "live_tracking":             { ".read": true, ".write": true },
+    "pricing":                   { ".read": true, ".write": true },
+    "subscriptions":             { ".read": true, ".write": true },
+    "withdrawals_confirmed":     { ".read": true, ".write": true },
+    "wallet_topups":             { ".read": true, ".write": true },
+    "subscriptions_received":    { ".read": true, ".write": true },
+    "comm_settings":             { ".read": true, ".write": true },
+    "food_settings":             { ".read": true, ".write": true },
+    "restaurant_payments":       { ".read": true, ".write": true },
+    "settlements":               { ".read": true, ".write": true },
+    "settings":                  { ".read": true, ".write": true },
+    "fare_pricing":              { ".read": true, ".write": true },
+    "partner_pins":              { ".read": true, ".write": true },
+    "restaurants":               { ".read": true, ".write": true }
+  }
+}
