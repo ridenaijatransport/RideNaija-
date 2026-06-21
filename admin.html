@@ -386,68 +386,54 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 </head>
 <body>
 
-<!-- FCM DIAGNOSTIC — temporary debug tool, shows exactly what's happening with push setup -->
-<button id="fcm-debug-btn" onclick="window.runFcmDiagnostic && window.runFcmDiagnostic()" style="position:fixed;top:8px;left:8px;right:8px;z-index:999999;background:#ff0000;color:#fff;border:4px solid #fff;border-radius:14px;padding:18px;font-family:sans-serif;font-weight:900;font-size:18px;box-shadow:0 4px 20px rgba(0,0,0,0.8);text-align:center;">🔔 TAP HERE — CHECK NOTIFICATIONS 🔔</button>
-<div id="fcm-debug-box" style="display:none;position:fixed;top:75px;left:8px;right:8px;z-index:999999;background:#000;color:#0f0;border:3px solid #ff0000;border-radius:10px;padding:14px;font-family:monospace;font-size:13px;white-space:pre-wrap;max-height:70vh;overflow-y:auto;"></div>
+<!-- FCM STATUS — runs automatically on page load, no button needed -->
+<div id="fcm-status-bar" style="position:fixed;top:0;left:0;right:0;z-index:999999;background:#222;color:#fff;font-family:monospace;font-size:12px;padding:6px 10px;border-bottom:2px solid #ff0000;">Notifications: checking...</div>
 <script>
-window.runFcmDiagnostic = async function(){
-  const box = document.getElementById('fcm-debug-box');
-  box.style.display = 'block';
-  let log = '';
-  const out = (line) => { log += line + '\n'; box.textContent = log; };
+window.addEventListener('load', function(){
+  setTimeout(async function(){
+    const bar = document.getElementById('fcm-status-bar');
+    function setStatus(text, color){
+      bar.textContent = 'Notifications: ' + text;
+      bar.style.background = color || '#222';
+    }
+    try{
+      if(!('Notification' in window)){ setStatus('not supported on this browser', '#660000'); return; }
+      if(!('serviceWorker' in navigator)){ setStatus('service worker not supported', '#660000'); return; }
+      if(typeof firebase === 'undefined' || typeof firebase.messaging !== 'function'){
+        setStatus('Firebase messaging script failed to load', '#660000'); return;
+      }
+      let perm = Notification.permission;
+      if(perm === 'default'){ perm = await Notification.requestPermission(); }
+      if(perm !== 'granted'){ setStatus('permission ' + perm + ' (tap site info icon to allow)', '#664400'); return; }
 
-  out('1. Notification API available: ' + ('Notification' in window));
-  out('2. Current permission state: ' + (('Notification' in window) ? Notification.permission : 'N/A'));
-  out('3. Service worker support: ' + ('serviceWorker' in navigator));
-  out('4. Page is HTTPS: ' + (location.protocol === 'https:'));
-  out('5. firebase object exists: ' + (typeof firebase !== 'undefined'));
+      const reg = await navigator.serviceWorker.register('sw.js');
+      const messaging = firebase.messaging();
+      const token = await messaging.getToken({
+        vapidKey: 'BCBQljhS54Ve18FV82xljM6bqF6OF6ug7IdS6XR1nAlGz8Cl7-TpHU0p_ES9Jhghelf5i-6IoDsfMjfaZD7Hn4c',
+        serviceWorkerRegistration: reg
+      });
+      if(!token){ setStatus('no token returned', '#660000'); return; }
 
-  try{
-    out('6. firebase.messaging() works: ' + (typeof firebase.messaging === 'function'));
-  }catch(e){
-    out('6. firebase.messaging() ERROR: ' + e.message);
-  }
-
-  try{
-    out('7. Requesting permission now...');
-    const perm = await Notification.requestPermission();
-    out('   → Result: ' + perm);
-  }catch(e){
-    out('   → ERROR: ' + e.message);
-  }
-
-  try{
-    out('8. Registering service worker...');
-    const reg = await navigator.serviceWorker.register('sw.js');
-    out('   → Registered, scope: ' + reg.scope);
-
-    out('9. Getting FCM token...');
-    const messaging = firebase.messaging();
-    const token = await messaging.getToken({
-      vapidKey: 'BCBQljhS54Ve18FV82xljM6bqF6OF6ug7IdS6XR1nAlGz8Cl7-TpHU0p_ES9Jhghelf5i-6IoDsfMjfaZD7Hn4c',
-      serviceWorkerRegistration: reg
-    });
-    if(token){
-      out('   → SUCCESS! Token (first 20 chars): ' + token.slice(0,20) + '...');
-      out('');
-      out('✅ Everything works. Subscribing to admin_alerts...');
       const subRes = await fetch('/api/subscribe-topic', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ token: token, topic: 'admin_alerts' })
       });
-      const subJson = await subRes.json();
-      out('   → Server response: ' + JSON.stringify(subJson));
-    } else {
-      out('   → No token returned (null)');
+      const subJson = await subRes.json().catch(()=>({}));
+      if(subJson && subJson.success){
+        setStatus('ACTIVE — subscribed to admin alerts ✅', '#006600');
+      } else {
+        setStatus('token OK but server subscribe failed: ' + JSON.stringify(subJson), '#664400');
+      }
+    }catch(e){
+      const bar2 = document.getElementById('fcm-status-bar');
+      bar2.textContent = 'Notifications: ERROR — ' + e.message;
+      bar2.style.background = '#660000';
     }
-  }catch(e){
-    out('   → ERROR: ' + e.message);
-    out('   → Full error: ' + JSON.stringify(e, Object.getOwnPropertyNames(e)));
-  }
-};
+  }, 1500);
+});
 </script>
-<!-- END FCM DIAGNOSTIC -->
+<!-- END FCM STATUS -->
 
 <!-- LOGIN -->
 <div id="login-screen">
