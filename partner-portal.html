@@ -36,14 +36,10 @@
     window.requestNotificationPermission = async function(savePath){
       try{
         if(!('Notification' in window) || !('serviceWorker' in navigator)) return null;
-        if(FCM_VAPID_KEY === 'BCBQljhS54Ve18FV82xljM6bqF6OF6ug7IdS6XR1nAlGz8Cl7-TpHU0p_ES9Jhghelf5i-6IoDsfMjfaZD7Hn4c'){
-          console.warn('[RideNaija] FCM not configured — add your VAPID key in partner-portal.html');
-          return null;
-        }
         var permission = await Notification.requestPermission();
         if(permission !== 'granted') return null;
         var messaging = firebase.messaging();
-        var registration = await navigator.serviceWorker.register('sw.js');
+        var registration = await navigator.serviceWorker.ready;
         var token = await messaging.getToken({ vapidKey: FCM_VAPID_KEY, serviceWorkerRegistration: registration });
         if(!token) return null;
         if(savePath) db.ref(savePath).set({ token: token, updatedAt: new Date().toISOString() });
