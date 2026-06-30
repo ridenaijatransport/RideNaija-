@@ -2,9 +2,6 @@
 // RideNaija — FCM Push Notification Sender (Netlify Serverless Function)
 // File location: netlify/functions/send-notification.js
 //
-// This runs on Netlify's server — customers and riders never see this code.
-// It sends real push notifications using Firebase Admin SDK + a service account.
-//
 // HOW TO SET UP:
 // 1. Go to console.firebase.google.com → your RideNaija project
 // 2. Click the gear icon → Project Settings → Service Accounts tab
@@ -20,14 +17,20 @@ const admin = require('firebase-admin');
 
 // Initialize Firebase Admin SDK once (Netlify reuses warm function instances)
 if (!admin.apps.length) {
-  try {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}');
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-      databaseURL: 'https://ridenaija-14d88-default-rtdb.firebaseio.com'
-    });
-  } catch (e) {
-    console.error('Firebase Admin init failed:', e.message);
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (!raw) {
+    console.error('[RideNaija] FIREBASE_SERVICE_ACCOUNT env var is NOT SET. Go to Netlify → Site settings → Environment Variables and add it.');
+  } else {
+    try {
+      const serviceAccount = JSON.parse(raw);
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+        databaseURL: 'https://ridenaija-14d88-default-rtdb.firebaseio.com'
+      });
+      console.log('[RideNaija] Firebase Admin SDK initialized OK. Project:', serviceAccount.project_id);
+    } catch (e) {
+      console.error('[RideNaija] Firebase Admin init failed — JSON parse error:', e.message);
+    }
   }
 }
 
@@ -37,11 +40,16 @@ exports.handler = async function (event) {
   }
 
   if (!admin.apps.length) {
-    return { statusCode: 500, body: JSON.stringify({ error: 'Notification service not configured. Set FIREBASE_SERVICE_ACCOUNT in Netlify environment variables.' }) };
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: 'Notification service not configured. Set FIREBASE_SERVICE_ACCOUNT in Netlify environment variables.' })
+    };
   }
 
   try {
     const { token, title, body, data, topic } = JSON.parse(event.body || '{}');
+
+    console.log('[RideNaija] send-notification called. topic:', topic, 'token?', !!token, 'title:', title);
 
     if (!token && !topic) {
       return { statusCode: 400, body: JSON.stringify({ error: 'token or topic is required' }) };
@@ -66,6 +74,7 @@ exports.handler = async function (event) {
     };
 
     const response = await admin.messaging().send(message);
+    console.log('[RideNaija] Notification sent OK. messageId:', response);
 
     return {
       statusCode: 200,
@@ -73,8 +82,7 @@ exports.handler = async function (event) {
     };
 
   } catch (error) {
-    // Common case: token is stale/invalid (user uninstalled, cleared data, etc.)
-    // Don't treat this as a hard failure — just report it so the caller can clean up.
+    console.error('[RideNaija] send error:', error.code, error.message);
     const isInvalidToken = error.code === 'messaging/registration-token-not-registered' ||
                             error.code === 'messaging/invalid-registration-token';
     return {

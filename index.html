@@ -75,6 +75,10 @@
     window.requestNotificationPermission = async function(savePath){
       try{
         if(!('Notification' in window) || !('serviceWorker' in navigator)) return null;
+        if(!FCM_VAPID_KEY){
+          console.warn('[RideNaija] FCM not configured — add your VAPID key in index.html');
+          return null;
+        }
         const permission = await Notification.requestPermission();
         if(permission !== 'granted') return null;
 
@@ -3701,18 +3705,6 @@ function completeBooking(pickup,dest,phone,pay,fare,ref,chosenRider){
         }
       }).catch(function(){});
     }
-
-    // Notify admin devices — a new ride booking needs attention
-    fetch('/api/send-notification', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({
-        topic: 'admin_alerts',
-        title: '🏍️ New Ride Booking!',
-        body: pickup+' → '+dest+' · ₦'+fare.toLocaleString(),
-        data: { link:'/admin.html' }
-      })
-    }).catch(function(){});
 
     // Ask for push notification permission so this customer can be notified when the
     // ride completes, even if they close the app. Keyed by the exact phone just booked with.
