@@ -62,7 +62,10 @@
         _showNotifStatus('⏳ Getting notification token...', '#2980b9');
         var messaging = firebase.messaging();
         var registration = await navigator.serviceWorker.ready;
-        var token = await messaging.getToken({ vapidKey: FCM_VAPID_KEY, serviceWorkerRegistration: registration });
+        var token = await messaging.getToken({ vapidKey: FCM_VAPID_KEY, serviceWorkerRegistration: registration }).catch(function(tokenErr){
+          _showNotifStatus('❌ Token error: ' + tokenErr.message, '#c0392b');
+          return null;
+        });
         if(!token){
           _showNotifStatus('❌ No FCM token returned. Check VAPID key.', '#c0392b');
           return null;
