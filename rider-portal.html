@@ -246,7 +246,14 @@ window.requestNotificationPermission = async function(savePath){
     if(permission !== 'granted') return null;
 
     const messaging = firebase.messaging();
-    const registration = await navigator.serviceWorker.register('sw.js');
+    const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+    if(registration.installing) {
+      await new Promise(function(resolve) {
+        registration.installing.addEventListener('statechange', function(e) {
+          if(e.target.state === 'activated') resolve();
+        });
+      });
+    }
     const token = await messaging.getToken({ vapidKey: FCM_VAPID_KEY, serviceWorkerRegistration: registration });
     if(!token) return null;
 

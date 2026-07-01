@@ -61,10 +61,16 @@
         }
         _showNotifStatus('⏳ Getting notification token...', '#2980b9');
         var messaging = firebase.messaging();
-        // Register sw.js explicitly — admin.html must do this itself
-        // since it may be opened directly without going through index.html
-        var registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
-        await navigator.serviceWorker.ready;
+        // Use firebase-messaging-sw.js — Chrome FCM requires this specific file name
+        var registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+        // Wait for it to be active
+        if(registration.installing) {
+          await new Promise(function(resolve) {
+            registration.installing.addEventListener('statechange', function(e) {
+              if(e.target.state === 'activated') resolve();
+            });
+          });
+        }
         var token = await messaging.getToken({ vapidKey: FCM_VAPID_KEY, serviceWorkerRegistration: registration }).catch(function(tokenErr){
           _showNotifStatus('❌ Token error: ' + tokenErr.message, '#c0392b');
           return null;
