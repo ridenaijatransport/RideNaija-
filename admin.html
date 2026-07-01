@@ -33,50 +33,69 @@
 
     // ═══════════════════════════════════════════════════════════
     // FCM PUSH NOTIFICATIONS — admin devices subscribe to "admin_alerts"
-    // so any new order/booking needing a rider reaches every admin phone.
-    // ═══════════════════════════════════════════════════════════
     var FCM_VAPID_KEY = 'BCBQljhS54Ve18FV82xljM6bqF6OF6ug7IdS6XR1nAlGz8Cl7-TpHU0p_ES9Jhghelf5i-6IoDsfMjfaZD7Hn4c';
+    var _fcmReady = false;
+
+    function _showNotifStatus(msg, color){
+      var el = document.getElementById('_notif_status');
+      if(!el){ el = document.createElement('div'); el.id='_notif_status';
+        el.style.cssText='position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:'+color+';color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;z-index:99999;max-width:90vw;text-align:center;';
+        document.body.appendChild(el); }
+      el.style.background = color;
+      el.textContent = msg;
+      el.style.display = 'block';
+      clearTimeout(el._t);
+      el._t = setTimeout(function(){ el.style.display='none'; }, 8000);
+    }
+
     window.requestAdminNotifications = async function(){
       try{
         if(!('Notification' in window) || !('serviceWorker' in navigator)){
-          console.warn('[RideNaija] Notifications or ServiceWorker not supported on this browser');
+          _showNotifStatus('❌ Notifications not supported on this browser', '#c0392b');
           return null;
         }
-        // Request permission — browser will show the "Allow notifications?" prompt
         var permission = await Notification.requestPermission();
         if(permission !== 'granted'){
-          console.warn('[RideNaija] Notification permission not granted:', permission);
+          _showNotifStatus('❌ Notification permission denied. Please allow in browser settings.', '#c0392b');
           return null;
         }
+        _showNotifStatus('⏳ Getting notification token...', '#2980b9');
         var messaging = firebase.messaging();
         var registration = await navigator.serviceWorker.ready;
         var token = await messaging.getToken({ vapidKey: FCM_VAPID_KEY, serviceWorkerRegistration: registration });
-        if(!token){ console.warn('[RideNaija] No FCM token returned'); return null; }
+        if(!token){
+          _showNotifStatus('❌ No FCM token returned. Check VAPID key.', '#c0392b');
+          return null;
+        }
         window._fcmToken = token;
-        console.log('[RideNaija] Admin FCM token obtained:', token.substring(0,20)+'...');
-        // Subscribe this device to the admin_alerts topic (server-side, since web
-        // clients can't self-subscribe to topics)
-        fetch('/api/subscribe-topic', {
+        _showNotifStatus('⏳ Subscribing to admin alerts...', '#2980b9');
+        var resp = await fetch('/api/subscribe-topic', {
           method:'POST',
           headers:{'Content-Type':'application/json'},
           body: JSON.stringify({ token: token, topic: 'admin_alerts' })
-        }).catch(function(e){ console.warn('[RideNaija] subscribe-topic failed:', e.message); });
+        });
+        var result = await resp.json();
+        if(result.success){
+          _fcmReady = true;
+          _showNotifStatus('✅ Notifications ready! You will receive alerts.', '#27ae60');
+        } else {
+          _showNotifStatus('❌ Subscribe failed: ' + (result.error||'unknown error'), '#c0392b');
+        }
+        messaging.onMessage(function(payload){
+          var title = (payload.notification && payload.notification.title) || 'RideNaija';
+          var body = (payload.notification && payload.notification.body) || '';
+          if(window.showToast) window.showToast('🔔 ' + title + (body?(' — '+body):''));
+        });
         return token;
       }catch(e){
-        console.warn('[RideNaija] FCM permission/token error:', e.message);
+        _showNotifStatus('❌ Error: ' + e.message, '#c0392b');
         return null;
       }
     };
-    try{
-      var messaging = firebase.messaging();
-      messaging.onMessage(function(payload){
-        var title = (payload.notification && payload.notification.title) || 'RideNaija';
-        var body = (payload.notification && payload.notification.body) || '';
-        if(window.showToast) window.showToast('🔔 ' + title + (body?(' — '+body):''));
-      });
-    }catch(e){ console.warn('[RideNaija] messaging.onMessage setup failed:', e.message); }
-    // Ask once per session, shortly after admin dashboard loads
-    setTimeout(function(){ if(window.requestAdminNotifications) window.requestAdminNotifications(); }, 2000);
+    // Called after admin logs in successfully — see auth block below
+    window._triggerAdminNotifications = function(){
+      if(!_fcmReady) setTimeout(window.requestAdminNotifications, 1500);
+    };
 
     db.ref('bookings').on('value', function(snap) {
       window.FB_BOOKINGS = snap.val() ? Object.entries(snap.val()).map(function(e){return Object.assign({},e[1],{fbKey:e[0]});}).reverse() : [];
@@ -1774,6 +1793,7 @@ function doLogin(){
     document.getElementById('login-screen').classList.add('hide');
     document.getElementById('dashboard').classList.add('show');
     loadAll();
+    if(window._triggerAdminNotifications) window._triggerAdminNotifications();
   } else {
     const e=document.getElementById('login-err');
     e.style.display='block';
@@ -1795,6 +1815,7 @@ function logout(){
   if(auth === '1' && fresh){
     document.getElementById('login-screen').classList.add('hide');
     document.getElementById('dashboard').classList.add('show');
+    if(window._triggerAdminNotifications) window._triggerAdminNotifications();
     // Wait for Firebase listeners to populate data before loading UI
     // Retry up to 4 times with 600ms gaps
     let attempts = 0;
