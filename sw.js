@@ -15,12 +15,6 @@ self.addEventListener('fetch', e => {
   e.respondWith(caches.match(e.request).then(cached => cached || fetch(e.request).catch(() => caches.match('/index.html'))));
 });
 
-// ═══════════════════════════════════════════════════════════
-// FIREBASE CLOUD MESSAGING — background push notifications
-// Merged into this same service worker (rather than a separate
-// firebase-messaging-sw.js) so there's only one SW registration
-// to manage, avoiding scope/registration-order conflicts.
-// ═══════════════════════════════════════════════════════════
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
 
@@ -36,9 +30,7 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-// Fires when a push arrives and the app is not in the foreground
-// (closed, minimized, or a different browser tab is active)
-messaging.onBackgroundMessage(function (payload) {
+messaging.onBackgroundMessage(function(payload) {
   const title = (payload.notification && payload.notification.title) || 'RideNaija';
   const options = {
     body: (payload.notification && payload.notification.body) || '',
@@ -50,22 +42,16 @@ messaging.onBackgroundMessage(function (payload) {
   self.registration.showNotification(title, options);
 });
 
-// Tapping a notification focuses an existing tab if one is open, else opens a new one
-self.addEventListener('notificationclick', function (event) {
+self.addEventListener('notificationclick', function(event) {
   event.notification.close();
   const targetUrl = (event.notification.data && event.notification.data.link) || '/index.html';
-
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (windowClients) {
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(windowClients) {
       for (let i = 0; i < windowClients.length; i++) {
         const client = windowClients[i];
-        if (client.url.includes(targetUrl.split('?')[0]) && 'focus' in client) {
-          return client.focus();
-        }
+        if (client.url.includes(targetUrl.split('?')[0]) && 'focus' in client) return client.focus();
       }
-      if (clients.openWindow) {
-        return clients.openWindow(targetUrl);
-      }
+      if (clients.openWindow) return clients.openWindow(targetUrl);
     })
   );
 });
