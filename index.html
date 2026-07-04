@@ -94,6 +94,16 @@
         if(permission !== 'granted') return null;
         _showNotifStatus('⏳ Setting up notifications...', '#2980b9');
         const messaging = firebase.messaging();
+        // Clean up any stale service worker this device registered in the past
+        // (e.g. the old firebase-messaging-sw.js) — deleting the file from the
+        // server does NOT remove it from a browser that already registered it.
+        const existingRegs = await navigator.serviceWorker.getRegistrations();
+        for (const r of existingRegs) {
+          const activeUrl = (r.active && r.active.scriptURL) || (r.installing && r.installing.scriptURL) || (r.waiting && r.waiting.scriptURL) || '';
+          if (activeUrl && !activeUrl.endsWith('/sw.js')) {
+            await r.unregister();
+          }
+        }
         const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
         if(registration.installing) {
           await Promise.race([
@@ -1700,7 +1710,15 @@ function dismissPayRecovery(){
   showToast('Cleared. If money was deducted call 08120715812.');
 }
 
-if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(()=>{});
+if('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(function(regs){
+    regs.forEach(function(r){
+      var activeUrl = (r.active && r.active.scriptURL) || (r.installing && r.installing.scriptURL) || (r.waiting && r.waiting.scriptURL) || '';
+      if (activeUrl && !activeUrl.endsWith('/sw.js')) r.unregister();
+    });
+  }).catch(function(){});
+  navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(()=>{});
+}
 
 // ══════════════════════════════════════════
 // HELPERS

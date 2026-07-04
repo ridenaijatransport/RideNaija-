@@ -263,6 +263,16 @@ window.requestNotificationPermission = async function(savePath){
     }
     _showRiderNotifStatus('⏳ Setting up notifications...', '#2980b9');
     const messaging = firebase.messaging();
+    // Clean up any stale service worker this device registered in the past
+    // (e.g. the old firebase-messaging-sw.js) — deleting the file from the
+    // server does NOT remove it from a browser that already registered it.
+    const existingRegs = await navigator.serviceWorker.getRegistrations();
+    for (const r of existingRegs) {
+      const activeUrl = (r.active && r.active.scriptURL) || (r.installing && r.installing.scriptURL) || (r.waiting && r.waiting.scriptURL) || '';
+      if (activeUrl && !activeUrl.endsWith('/sw.js')) {
+        await r.unregister();
+      }
+    }
     const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
     if(registration.installing){
       await Promise.race([

@@ -61,6 +61,19 @@
         }
         _showNotifStatus('⏳ Getting notification token...', '#2980b9');
         var messaging = firebase.messaging();
+        // Clean up any stale service worker this device registered in the past
+        // (e.g. the old firebase-messaging-sw.js) — deleting the file from the
+        // server does NOT remove it from a browser that already registered it,
+        // and a leftover old worker firing alongside the new one is exactly
+        // what causes duplicate/blank-looking notifications.
+        var existingRegs = await navigator.serviceWorker.getRegistrations();
+        for (var i = 0; i < existingRegs.length; i++) {
+          var r = existingRegs[i];
+          var activeUrl = (r.active && r.active.scriptURL) || (r.installing && r.installing.scriptURL) || (r.waiting && r.waiting.scriptURL) || '';
+          if (activeUrl && !activeUrl.endsWith('/sw.js')) {
+            await r.unregister();
+          }
+        }
         // Use the single unified sw.js for everything (caching + FCM) — registering
         // any other script at this same scope causes the browser to flip-flop between
         // two service workers, which is what was causing duplicate/inconsistent pushes.

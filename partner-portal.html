@@ -60,6 +60,17 @@
         }
         _showPartnerNotifStatus('⏳ Setting up notifications...', '#2980b9');
         var messaging = firebase.messaging();
+        // Clean up any stale service worker this device registered in the past
+        // (e.g. the old firebase-messaging-sw.js) — deleting the file from the
+        // server does NOT remove it from a browser that already registered it.
+        var existingRegs = await navigator.serviceWorker.getRegistrations();
+        for (var i = 0; i < existingRegs.length; i++) {
+          var r = existingRegs[i];
+          var activeUrl = (r.active && r.active.scriptURL) || (r.installing && r.installing.scriptURL) || (r.waiting && r.waiting.scriptURL) || '';
+          if (activeUrl && !activeUrl.endsWith('/sw.js')) {
+            await r.unregister();
+          }
+        }
         var registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
         if(registration.installing){
           await Promise.race([
