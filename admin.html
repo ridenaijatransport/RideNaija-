@@ -61,15 +61,33 @@
         }
         _showNotifStatus('⏳ Getting notification token...', '#2980b9');
         var messaging = firebase.messaging();
-        // Use firebase-messaging-sw.js — Chrome FCM requires this specific file name
-        var registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+        // Clean up any stale service worker this device registered in the past
+        // (e.g. the old firebase-messaging-sw.js) — deleting the file from the
+        // server does NOT remove it from a browser that already registered it,
+        // and a leftover old worker firing alongside the new one is exactly
+        // what causes duplicate/blank-looking notifications.
+        var existingRegs = await navigator.serviceWorker.getRegistrations();
+        for (var i = 0; i < existingRegs.length; i++) {
+          var r = existingRegs[i];
+          var activeUrl = (r.active && r.active.scriptURL) || (r.installing && r.installing.scriptURL) || (r.waiting && r.waiting.scriptURL) || '';
+          if (activeUrl && !activeUrl.endsWith('/sw.js')) {
+            await r.unregister();
+          }
+        }
+        // Use the single unified sw.js for everything (caching + FCM) — registering
+        // any other script at this same scope causes the browser to flip-flop between
+        // two service workers, which is what was causing duplicate/inconsistent pushes.
+        var registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
         // Wait for it to be active
         if(registration.installing) {
-          await new Promise(function(resolve) {
-            registration.installing.addEventListener('statechange', function(e) {
-              if(e.target.state === 'activated') resolve();
-            });
-          });
+          await Promise.race([
+            new Promise(function(resolve) {
+              registration.installing.addEventListener('statechange', function(e) {
+                if(e.target.state === 'activated') resolve();
+              });
+            }),
+            new Promise(function(resolve){ setTimeout(resolve, 8000); }) // never hang forever
+          ]);
         }
         var token = await messaging.getToken({ vapidKey: FCM_VAPID_KEY, serviceWorkerRegistration: registration }).catch(function(tokenErr){
           _showNotifStatus('❌ Token error: ' + tokenErr.message, '#c0392b');
@@ -107,8 +125,9 @@
           _showNotifStatus('❌ Subscribe failed: ' + (result.error||'unknown error'), '#c0392b');
         }
         messaging.onMessage(function(payload){
-          var title = (payload.notification && payload.notification.title) || 'RideNaija';
-          var body = (payload.notification && payload.notification.body) || '';
+          var d = payload.data || {};
+          var title = d.title || 'RideNaija';
+          var body = d.body || '';
           if(window.showToast) window.showToast('🔔 ' + title + (body?(' — '+body):''));
         });
         return token;

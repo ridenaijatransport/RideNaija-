@@ -30,6 +30,7 @@
     "settings":                  { ".read": true, ".write": true },
     "fare_pricing":              { ".read": true, ".write": true },
     "partner_pins":              { ".read": true, ".write": true },
-    "restaurants":               { ".read": true, ".write": true }
+    "restaurants":               { ".read": true, ".write": true },
+    "fcm_tokens":                { ".read": true, ".write": true }
   }
 }

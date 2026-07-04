@@ -34,7 +34,7 @@ exports.handler = async function (event) {
     if (!title || !body) return { statusCode: 400, body: JSON.stringify({ error: 'title and body required' }) };
 
     // Use data-only payload to prevent browser showing its own unstyled notification.
-    // The service worker (firebase-messaging-sw.js) handles display via onBackgroundMessage.
+    // The service worker (sw.js) handles display via onBackgroundMessage.
     const message = {
       data: {
         title: title,

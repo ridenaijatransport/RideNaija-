@@ -1,8 +1,17 @@
-const CACHE_NAME = 'ridenaija-v20';
+const CACHE_NAME = 'ridenaija-v21';
 const ASSETS = ['/', '/index.html', '/admin.html', '/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
+  // Cache each asset independently so one missing/renamed file (e.g. an icon
+  // path that doesn't match what's actually deployed) can never block the
+  // whole install. cache.addAll() is all-or-nothing — a single 404 used to
+  // fail the entire install, which meant the SW never reached 'activated',
+  // which meant notification setup (which waits for that state) hung forever.
+  e.waitUntil(
+    caches.open(CACHE_NAME).then(cache =>
+      Promise.all(ASSETS.map(url => cache.add(url).catch(() => {})))
+    )
+  );
   self.skipWaiting();
 });
 
@@ -17,9 +26,11 @@ self.addEventListener('fetch', e => {
 
 // ═══════════════════════════════════════════════════════════
 // FIREBASE CLOUD MESSAGING — background push notifications
-// Merged into this same service worker (rather than a separate
-// firebase-messaging-sw.js) so there's only one SW registration
-// to manage, avoiding scope/registration-order conflicts.
+// This is the ONLY service worker file in the whole app. Every portal
+// (admin/index/rider-portal/partner-portal) registers this exact same
+// file at the exact same scope, so there is only ever one SW registration
+// for the origin. Registering more than one script at the same scope was
+// the root cause of duplicate/inconsistent push notifications.
 // ═══════════════════════════════════════════════════════════
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
@@ -38,13 +49,18 @@ const messaging = firebase.messaging();
 
 // Fires when a push arrives and the app is not in the foreground
 // (closed, minimized, or a different browser tab is active)
+// NOTE: the backend (netlify/functions/send-notification.js) sends a
+// DATA-ONLY payload (message.data, not message.notification) on purpose —
+// that's what stops the browser from auto-displaying its own unstyled
+// notification. So this handler must read payload.data, not payload.notification.
 messaging.onBackgroundMessage(function (payload) {
-  const title = (payload.notification && payload.notification.title) || 'RideNaija';
+  const data = payload.data || {};
+  const title = data.title || 'RideNaija';
   const options = {
-    body: (payload.notification && payload.notification.body) || '',
+    body: data.body || '',
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
-    data: payload.data || {},
+    data: { link: data.link || '/index.html' },
     vibrate: [200, 100, 200]
   };
   self.registration.showNotification(title, options);

@@ -60,20 +60,41 @@
         }
         _showPartnerNotifStatus('⏳ Setting up notifications...', '#2980b9');
         var messaging = firebase.messaging();
-        var registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+        // Clean up any stale service worker this device registered in the past
+        // (e.g. the old firebase-messaging-sw.js) — deleting the file from the
+        // server does NOT remove it from a browser that already registered it.
+        var existingRegs = await navigator.serviceWorker.getRegistrations();
+        for (var i = 0; i < existingRegs.length; i++) {
+          var r = existingRegs[i];
+          var activeUrl = (r.active && r.active.scriptURL) || (r.installing && r.installing.scriptURL) || (r.waiting && r.waiting.scriptURL) || '';
+          if (activeUrl && !activeUrl.endsWith('/sw.js')) {
+            await r.unregister();
+          }
+        }
+        var registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
         if(registration.installing){
-          await new Promise(function(resolve){
-            registration.installing.addEventListener('statechange', function(e){
-              if(e.target.state === 'activated') resolve();
-            });
-          });
+          await Promise.race([
+            new Promise(function(resolve){
+              registration.installing.addEventListener('statechange', function(e){
+                if(e.target.state === 'activated') resolve();
+              });
+            }),
+            new Promise(function(resolve){ setTimeout(resolve, 8000); })
+          ]);
         }
         var token = await messaging.getToken({ vapidKey: FCM_VAPID_KEY, serviceWorkerRegistration: registration }).catch(function(e){
           _showPartnerNotifStatus('❌ Token error: ' + e.message, '#c0392b');
           return null;
         });
         if(!token) return null;
-        if(savePath) db.ref(savePath).set({ token: token, updatedAt: new Date().toISOString() });
+        if(savePath){
+          try {
+            await db.ref(savePath).set({ token: token, updatedAt: new Date().toISOString() });
+          } catch(saveErr) {
+            _showPartnerNotifStatus('❌ Could not save token: ' + saveErr.message, '#c0392b');
+            return null;
+          }
+        }
         window._fcmToken = token;
         _showPartnerNotifStatus('✅ Notifications ready!', '#27ae60');
         return token;
@@ -85,8 +106,9 @@
     try{
       var messaging = firebase.messaging();
       messaging.onMessage(function(payload){
-        var title = (payload.notification && payload.notification.title) || 'RideNaija';
-        var body = (payload.notification && payload.notification.body) || '';
+        var d = payload.data || {};
+        var title = d.title || 'RideNaija';
+        var body = d.body || '';
         if(window.showToast) window.showToast('🔔 ' + title + (body?(' — '+body):''));
       });
     }catch(e){}
