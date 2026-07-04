@@ -94,7 +94,7 @@
         if(permission !== 'granted') return null;
         _showNotifStatus('⏳ Setting up notifications...', '#2980b9');
         const messaging = firebase.messaging();
-        const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+        const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
         if(registration.installing) {
           await new Promise(function(resolve) {
             registration.installing.addEventListener('statechange', function(e) {
@@ -122,8 +122,9 @@
     try{
       const messaging = firebase.messaging();
       messaging.onMessage(function(payload){
-        const title = (payload.notification && payload.notification.title) || 'RideNaija';
-        const body = (payload.notification && payload.notification.body) || '';
+        const d = payload.data || {};
+        const title = d.title || 'RideNaija';
+        const body = d.body || '';
         if(window.showToast) window.showToast('🔔 ' + title + (body?(' — '+body):''));
       });
     }catch(e){}
@@ -1696,7 +1697,7 @@ function dismissPayRecovery(){
   showToast('Cleared. If money was deducted call 08120715812.');
 }
 
-if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(()=>{});
 
 // ══════════════════════════════════════════
 // HELPERS

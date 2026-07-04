@@ -60,7 +60,7 @@
         }
         _showPartnerNotifStatus('⏳ Setting up notifications...', '#2980b9');
         var messaging = firebase.messaging();
-        var registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+        var registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
         if(registration.installing){
           await new Promise(function(resolve){
             registration.installing.addEventListener('statechange', function(e){
@@ -85,8 +85,9 @@
     try{
       var messaging = firebase.messaging();
       messaging.onMessage(function(payload){
-        var title = (payload.notification && payload.notification.title) || 'RideNaija';
-        var body = (payload.notification && payload.notification.body) || '';
+        var d = payload.data || {};
+        var title = d.title || 'RideNaija';
+        var body = d.body || '';
         if(window.showToast) window.showToast('🔔 ' + title + (body?(' — '+body):''));
       });
     }catch(e){}

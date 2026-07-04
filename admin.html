@@ -61,8 +61,10 @@
         }
         _showNotifStatus('⏳ Getting notification token...', '#2980b9');
         var messaging = firebase.messaging();
-        // Use firebase-messaging-sw.js — Chrome FCM requires this specific file name
-        var registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+        // Use the single unified sw.js for everything (caching + FCM) — registering
+        // any other script at this same scope causes the browser to flip-flop between
+        // two service workers, which is what was causing duplicate/inconsistent pushes.
+        var registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
         // Wait for it to be active
         if(registration.installing) {
           await new Promise(function(resolve) {
@@ -107,8 +109,9 @@
           _showNotifStatus('❌ Subscribe failed: ' + (result.error||'unknown error'), '#c0392b');
         }
         messaging.onMessage(function(payload){
-          var title = (payload.notification && payload.notification.title) || 'RideNaija';
-          var body = (payload.notification && payload.notification.body) || '';
+          var d = payload.data || {};
+          var title = d.title || 'RideNaija';
+          var body = d.body || '';
           if(window.showToast) window.showToast('🔔 ' + title + (body?(' — '+body):''));
         });
         return token;

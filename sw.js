@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ridenaija-v20';
+const CACHE_NAME = 'ridenaija-v21';
 const ASSETS = ['/', '/index.html', '/admin.html', '/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -15,6 +15,14 @@ self.addEventListener('fetch', e => {
   e.respondWith(caches.match(e.request).then(cached => cached || fetch(e.request).catch(() => caches.match('/index.html'))));
 });
 
+// ═══════════════════════════════════════════════════════════
+// FIREBASE CLOUD MESSAGING — background push notifications
+// This is the ONLY service worker file in the whole app. Every portal
+// (admin/index/rider-portal/partner-portal) registers this exact same
+// file at the exact same scope, so there is only ever one SW registration
+// for the origin. Registering more than one script at the same scope was
+// the root cause of duplicate/inconsistent push notifications.
+// ═══════════════════════════════════════════════════════════
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
 
@@ -30,28 +38,41 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-messaging.onBackgroundMessage(function(payload) {
-  const title = (payload.notification && payload.notification.title) || 'RideNaija';
+// Fires when a push arrives and the app is not in the foreground
+// (closed, minimized, or a different browser tab is active)
+// NOTE: the backend (netlify/functions/send-notification.js) sends a
+// DATA-ONLY payload (message.data, not message.notification) on purpose —
+// that's what stops the browser from auto-displaying its own unstyled
+// notification. So this handler must read payload.data, not payload.notification.
+messaging.onBackgroundMessage(function (payload) {
+  const data = payload.data || {};
+  const title = data.title || 'RideNaija';
   const options = {
-    body: (payload.notification && payload.notification.body) || '',
+    body: data.body || '',
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
-    data: payload.data || {},
+    data: { link: data.link || '/index.html' },
     vibrate: [200, 100, 200]
   };
   self.registration.showNotification(title, options);
 });
 
-self.addEventListener('notificationclick', function(event) {
+// Tapping a notification focuses an existing tab if one is open, else opens a new one
+self.addEventListener('notificationclick', function (event) {
   event.notification.close();
   const targetUrl = (event.notification.data && event.notification.data.link) || '/index.html';
+
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(windowClients) {
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (windowClients) {
       for (let i = 0; i < windowClients.length; i++) {
         const client = windowClients[i];
-        if (client.url.includes(targetUrl.split('?')[0]) && 'focus' in client) return client.focus();
+        if (client.url.includes(targetUrl.split('?')[0]) && 'focus' in client) {
+          return client.focus();
+        }
       }
-      if (clients.openWindow) return clients.openWindow(targetUrl);
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl);
+      }
     })
   );
 });
