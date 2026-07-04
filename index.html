@@ -72,16 +72,27 @@
     // "Web configuration" → Web Push certificates → copy the key pair
     const FCM_VAPID_KEY = 'BCBQljhS54Ve18FV82xljM6bqF6OF6ug7IdS6XR1nAlGz8Cl7-TpHU0p_ES9Jhghelf5i-6IoDsfMjfaZD7Hn4c';
 
+    function _showNotifStatus(msg, color){
+      var el = document.getElementById('_idx_notif_status');
+      if(!el){
+        el = document.createElement('div');
+        el.id = '_idx_notif_status';
+        el.style.cssText = 'position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:'+color+';color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;z-index:99999;max-width:90vw;text-align:center;';
+        document.body.appendChild(el);
+      }
+      el.style.background = color;
+      el.textContent = msg;
+      el.style.display = 'block';
+      clearTimeout(el._t);
+      el._t = setTimeout(function(){ el.style.display='none'; }, 8000);
+    }
+
     window.requestNotificationPermission = async function(savePath){
       try{
         if(!('Notification' in window) || !('serviceWorker' in navigator)) return null;
-        if(!FCM_VAPID_KEY){
-          console.warn('[RideNaija] FCM not configured — add your VAPID key in index.html');
-          return null;
-        }
         const permission = await Notification.requestPermission();
         if(permission !== 'granted') return null;
-
+        _showNotifStatus('⏳ Setting up notifications...', '#2980b9');
         const messaging = firebase.messaging();
         const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
         if(registration.installing) {
@@ -91,15 +102,17 @@
             });
           });
         }
-        const token = await messaging.getToken({ vapidKey: FCM_VAPID_KEY, serviceWorkerRegistration: registration });
+        const token = await messaging.getToken({ vapidKey: FCM_VAPID_KEY, serviceWorkerRegistration: registration }).catch(function(e){
+          _showNotifStatus('❌ Token error: ' + e.message, '#c0392b');
+          return null;
+        });
         if(!token) return null;
-
-        // Save the token to Firebase so the server knows where to send pushes
         if(savePath) _db.ref(savePath).set({ token, updatedAt: new Date().toISOString() });
         window._fcmToken = token;
+        _showNotifStatus('✅ Notifications ready!', '#27ae60');
         return token;
       }catch(e){
-        console.warn('[RideNaija] FCM permission/token error:', e.message);
+        _showNotifStatus('❌ Error: ' + e.message, '#c0392b');
         return null;
       }
     };
@@ -3086,7 +3099,20 @@ function selSvc(btn,type){
   if(goodsSec) goodsSec.classList.toggle('show', type==='goods');
   if(goodsDescSec) goodsDescSec.classList.toggle('show', type==='goods');
   if(royalSec) royalSec.classList.toggle('show', type==='royal_ride');
-  if(mktSec) mktSec.style.display = (type==='market') ? 'block' : 'none';
+  if(mktSec){
+    mktSec.style.display = (type==='market') ? 'block' : 'none';
+    if(type==='market'){
+      // Always fetch latest pricing from Firebase before showing market fees
+      if(window.firebaseDB && window.firebaseRef && window.firebaseGet){
+        window.firebaseGet(window.firebaseRef(window.firebaseDB,'pricing')).then(function(snap){
+          if(snap.val()) window.FB_PRICING = snap.val();
+          calcMarketTotal();
+        }).catch(function(){ calcMarketTotal(); });
+      } else {
+        calcMarketTotal();
+      }
+    }
+  }
   const taxiSec=document.getElementById('taxi-section');
   if(taxiSec) taxiSec.style.display=(type==='taxi')?'block':'none';
   const dedSec=document.getElementById('dedicated-section');
