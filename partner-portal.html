@@ -30,20 +30,21 @@
 
     // ═══════════════════════════════════════════════════════════
     // FCM PUSH NOTIFICATIONS — request permission, get token, save it
-    // ═══════════════════════════════════════════════════════════
-    // ⚠️ Same VAPID key as index.html / rider-portal.html — replace before going live
     var FCM_VAPID_KEY = 'BCBQljhS54Ve18FV82xljM6bqF6OF6ug7IdS6XR1nAlGz8Cl7-TpHU0p_ES9Jhghelf5i-6IoDsfMjfaZD7Hn4c';
     window.requestNotificationPermission = async function(savePath){
       try{
         if(!('Notification' in window) || !('serviceWorker' in navigator)) return null;
-        if(FCM_VAPID_KEY === 'BCBQljhS54Ve18FV82xljM6bqF6OF6ug7IdS6XR1nAlGz8Cl7-TpHU0p_ES9Jhghelf5i-6IoDsfMjfaZD7Hn4c'){
-          console.warn('[RideNaija] FCM not configured — add your VAPID key in partner-portal.html');
-          return null;
-        }
         var permission = await Notification.requestPermission();
         if(permission !== 'granted') return null;
         var messaging = firebase.messaging();
-        var registration = await navigator.serviceWorker.register('sw.js');
+        var registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+        if(registration.installing){
+          await new Promise(function(resolve){
+            registration.installing.addEventListener('statechange', function(e){
+              if(e.target.state === 'activated') resolve();
+            });
+          });
+        }
         var token = await messaging.getToken({ vapidKey: FCM_VAPID_KEY, serviceWorkerRegistration: registration });
         if(!token) return null;
         if(savePath) db.ref(savePath).set({ token: token, updatedAt: new Date().toISOString() });
@@ -834,6 +835,19 @@ function confirmFoodOrder(fbKey, encPhone, encItems, encAddr, total){
       confirmedBy: currentPartner.name
     });
   }
+
+  // Notify admin that this order has been confirmed and needs a rider assigned
+  fetch('/api/send-notification', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      topic: 'admin_alerts',
+      title: '✅ Order Confirmed — Assign Rider',
+      body: currentPartner.name + ' confirmed order → ' + addr + ' · ₦' + (total||0).toLocaleString(),
+      data: { link: '/admin.html', bookingId: fbKey }
+    })
+  }).catch(function(){});
+
   // WhatsApp to customer confirming
   var msg = '✅ *Your food order is confirmed!*\n'
     +'🏪 '+currentPartner.name+' is preparing your order now.\n'

@@ -81,6 +81,19 @@
         }
         window._fcmToken = token;
         _showNotifStatus('⏳ Subscribing to admin alerts...', '#2980b9');
+
+        // Unsubscribe any previously saved token for this browser session first
+        // This prevents duplicate notifications when token refreshes
+        var prevToken = localStorage.getItem('rn_admin_fcm_token');
+        if(prevToken && prevToken !== token){
+          fetch('/api/subscribe-topic', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ token: prevToken, topic: 'admin_alerts', action: 'unsubscribe' })
+          }).catch(function(){});
+        }
+        localStorage.setItem('rn_admin_fcm_token', token);
+
         var resp = await fetch('/api/subscribe-topic', {
           method:'POST',
           headers:{'Content-Type':'application/json'},

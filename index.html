@@ -4418,14 +4418,11 @@ document.getElementById('trackModal').addEventListener('click',function(e){if(e.
 // ══════════════════════════════════════════
 // MARKET ORDER SYSTEM
 // ══════════════════════════════════════════
-// Market fees - loaded from admin pricing settings
-function getMktFees(){ 
-  const p = JSON.parse(localStorage.getItem('rn_pricing')||'{}');
+// Market fees - always read fresh from FB_PRICING, fallback to localStorage
+function getMktFees(){
+  const p = window.FB_PRICING || JSON.parse(localStorage.getItem('rn_pricing')||'{}');
   return { shopping: p.market_shopping_fee||300, delivery: p.market_delivery_fee||500 };
 }
-const _mktF = getMktFees();
-let MKT_SHOPPING_FEE = _mktF.shopping;
-let MKT_DELIVERY_FEE = _mktF.delivery;
 let mktPayMethod = 'Card';
 
 function setMarketCat(name){
@@ -4454,6 +4451,9 @@ function selMarketPay(method){
 }
 
 function calcMarketTotal(){
+  const _mktF = getMktFees();
+  const MKT_SHOPPING_FEE = _mktF.shopping;
+  const MKT_DELIVERY_FEE = _mktF.delivery;
   const budget = parseInt(document.getElementById('mkt-budget').value||'0');
   const phone  = (document.getElementById('mkt-phone').value||'').trim();
   const summary = document.getElementById('mkt-cost-summary');
@@ -4478,6 +4478,9 @@ function submitMarketOrder(){
   const budget  = parseInt(document.getElementById('mkt-budget').value||'0');
   const addr    = (document.getElementById('mkt-delivery-addr').value||'').trim();
   const phone   = (document.getElementById('mkt-phone').value||'').trim();
+  const _mktF   = getMktFees();
+  const MKT_SHOPPING_FEE = _mktF.shopping;
+  const MKT_DELIVERY_FEE = _mktF.delivery;
 
   // Validate
   if(!market)  { showToast('⚠️ Enter the market name'); return; }
