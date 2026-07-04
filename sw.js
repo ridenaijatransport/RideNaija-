@@ -2,7 +2,16 @@ const CACHE_NAME = 'ridenaija-v21';
 const ASSETS = ['/', '/index.html', '/admin.html', '/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
+  // Cache each asset independently so one missing/renamed file (e.g. an icon
+  // path that doesn't match what's actually deployed) can never block the
+  // whole install. cache.addAll() is all-or-nothing — a single 404 used to
+  // fail the entire install, which meant the SW never reached 'activated',
+  // which meant notification setup (which waits for that state) hung forever.
+  e.waitUntil(
+    caches.open(CACHE_NAME).then(cache =>
+      Promise.all(ASSETS.map(url => cache.add(url).catch(() => {})))
+    )
+  );
   self.skipWaiting();
 });
 

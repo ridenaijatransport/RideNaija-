@@ -62,11 +62,14 @@
         var messaging = firebase.messaging();
         var registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
         if(registration.installing){
-          await new Promise(function(resolve){
-            registration.installing.addEventListener('statechange', function(e){
-              if(e.target.state === 'activated') resolve();
-            });
-          });
+          await Promise.race([
+            new Promise(function(resolve){
+              registration.installing.addEventListener('statechange', function(e){
+                if(e.target.state === 'activated') resolve();
+              });
+            }),
+            new Promise(function(resolve){ setTimeout(resolve, 8000); })
+          ]);
         }
         var token = await messaging.getToken({ vapidKey: FCM_VAPID_KEY, serviceWorkerRegistration: registration }).catch(function(e){
           _showPartnerNotifStatus('❌ Token error: ' + e.message, '#c0392b');
