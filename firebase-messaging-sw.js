@@ -13,14 +13,32 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
+// Data-only payload — we display the notification manually so it only shows ONCE
 messaging.onBackgroundMessage(function(payload) {
-  const title = (payload.notification && payload.notification.title) || 'RideNaija';
-  const options = {
-    body: (payload.notification && payload.notification.body) || '',
+  const data = payload.data || {};
+  const title = data.title || 'RideNaija';
+  const body  = data.body  || '';
+  const link  = data.link  || '/index.html';
+
+  self.registration.showNotification(title, {
+    body: body,
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
-    data: payload.data || {},
+    data: { link: link },
     vibrate: [200, 100, 200]
-  };
-  self.registration.showNotification(title, options);
+  });
+});
+
+self.addEventListener('notificationclick', function(event) {
+  event.notification.close();
+  const targetUrl = (event.notification.data && event.notification.data.link) || '/index.html';
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(windowClients) {
+      for (let i = 0; i < windowClients.length; i++) {
+        const client = windowClients[i];
+        if (client.url.includes(targetUrl.split('?')[0]) && 'focus' in client) return client.focus();
+      }
+      if (clients.openWindow) return clients.openWindow(targetUrl);
+    })
+  );
 });

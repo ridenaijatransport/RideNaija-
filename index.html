@@ -151,6 +151,14 @@
       }
     });
 
+    // Load fare pricing (market fees, ride fares) — saved by admin via savePricing()
+    _db.ref('fare_pricing').on('value', function(snapshot){
+      if(snapshot.val()){
+        window.FB_FARE_PRICING = snapshot.val();
+        localStorage.setItem('rn_pricing', JSON.stringify(snapshot.val()));
+      }
+    });
+
     // Load restaurants for Food tab
     _db.ref('restaurants').on('value', function(snapshot){
       var data = snapshot.val();
@@ -3102,10 +3110,10 @@ function selSvc(btn,type){
   if(mktSec){
     mktSec.style.display = (type==='market') ? 'block' : 'none';
     if(type==='market'){
-      // Always fetch latest pricing from Firebase before showing market fees
+      // Always fetch latest fare pricing from Firebase before showing market fees
       if(window.firebaseDB && window.firebaseRef && window.firebaseGet){
-        window.firebaseGet(window.firebaseRef(window.firebaseDB,'pricing')).then(function(snap){
-          if(snap.val()) window.FB_PRICING = snap.val();
+        window.firebaseGet(window.firebaseRef(window.firebaseDB,'fare_pricing')).then(function(snap){
+          if(snap.val()){ window.FB_FARE_PRICING = snap.val(); localStorage.setItem('rn_pricing', JSON.stringify(snap.val())); }
           calcMarketTotal();
         }).catch(function(){ calcMarketTotal(); });
       } else {
@@ -4446,7 +4454,7 @@ document.getElementById('trackModal').addEventListener('click',function(e){if(e.
 // ══════════════════════════════════════════
 // Market fees - always read fresh from FB_PRICING, fallback to localStorage
 function getMktFees(){
-  const p = window.FB_PRICING || JSON.parse(localStorage.getItem('rn_pricing')||'{}');
+  const p = window.FB_FARE_PRICING || window.FB_PRICING || JSON.parse(localStorage.getItem('rn_pricing')||'{}');
   return { shopping: p.market_shopping_fee||300, delivery: p.market_delivery_fee||500 };
 }
 let mktPayMethod = 'Card';
