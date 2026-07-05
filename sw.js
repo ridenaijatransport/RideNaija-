@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ridenaija-v21';
+const CACHE_NAME = 'ridenaija-v22';
 const ASSETS = ['/', '/index.html', '/admin.html', '/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -56,12 +56,22 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage(function (payload) {
   const data = payload.data || {};
   const title = data.title || 'RideNaija';
+  // De-duplication: give every notification a stable "tag" derived from the
+  // booking it's about (or the title, if there's no booking id). If the same
+  // event ever gets delivered more than once to this device — a leftover old
+  // registration, a retried send, a topic fan-out hitting a stale token that
+  // is technically still "this device" — the browser REPLACES the existing
+  // notification with the same tag instead of stacking a second one next to
+  // it. This is what stops the "one blank + one with content" duplicate.
+  const tag = 'rn-' + (data.bookingId || data.link || title);
   const options = {
     body: data.body || '',
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
     data: { link: data.link || '/index.html' },
-    vibrate: [200, 100, 200]
+    vibrate: [200, 100, 200],
+    tag: tag,
+    renotify: true
   };
   self.registration.showNotification(title, options);
 });

@@ -11,3 +11,15 @@
   to = "/.well-known/assetlinks.json"
   status = 200
   headers = {Content-Type = "application/json"}
+
+# CRITICAL FOR FCM: sw.js must never be served stale. Browsers/CDNs caching this
+# file is a classic cause of "notifications randomly stop working" and duplicate/
+# blank pushes — a device can end up running an old cached copy of the service
+# worker indefinitely, even after Chrome data is cleared, because "Clear browsing
+# data" clears the browser's cache, not Netlify's CDN edge cache. Forcing
+# no-cache means every registration/update check fetches the real latest file.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+

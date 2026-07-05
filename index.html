@@ -41,6 +41,27 @@
 
   try {
     firebase.initializeApp(firebaseConfig);
+
+    // ═══════════════════════════════════════════════════════════
+    // Runs on EVERY page load, regardless of notification permission.
+    // Purges any old/duplicate service worker registration at this origin
+    // and force-refreshes /sw.js so this device is never stuck running a
+    // stale copy (which is what causes blank/duplicate or silently-broken
+    // push notifications even after clearing Chrome data).
+    // ═══════════════════════════════════════════════════════════
+    if ('serviceWorker' in navigator) {
+      (async function(){
+        try {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          for (const r of regs) {
+            const url = (r.active && r.active.scriptURL) || (r.installing && r.installing.scriptURL) || (r.waiting && r.waiting.scriptURL) || '';
+            if (url && !url.endsWith('/sw.js')) { await r.unregister(); }
+          }
+          const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+          reg.update().catch(()=>{});
+        } catch (e) { console.error('[RideNaija] SW cleanup error:', e); }
+      })();
+    }
     const _db = firebase.database();
 
     // Map compat SDK to same window globals the rest of the code uses

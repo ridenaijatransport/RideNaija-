@@ -141,6 +141,15 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
       </div>
     </div>
 
+    <!-- 🔔 PUSH NOTIFICATIONS — a real tap here is the only way that's guaranteed
+         to trigger the phone's permission prompt on every browser; the automatic
+         attempt at login can silently fail to prompt on some devices. -->
+    <div style="background:#1a1a2e;border:1px solid #444;border-radius:10px;padding:12px;margin:0 0 14px;">
+      <div style="font-weight:700;font-size:0.85rem;margin-bottom:8px;">🔔 Push Notifications</div>
+      <div id="notif-live-status" style="font-size:0.76rem;color:var(--muted);margin-bottom:8px;">Checking status…</div>
+      <button onclick="window.requestNotificationPermission('fcm_tokens/riders/'+(currentRider&&currentRider.fbKey)).then(window._refreshNotifStatus)" style="width:100%;padding:10px;border-radius:6px;background:#27ae60;color:#fff;font-weight:700;border:none;">🔔 Enable Notifications on This Device</button>
+    </div>
+
     <!-- COMPANY RIDER EARNINGS (only for company riders) -->
     <div id="company-earnings-section" style="display:none;">
       <div class="sec-title">🏢 My Company Earnings</div>
@@ -226,6 +235,27 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
+
+// ═══════════════════════════════════════════════════════════
+// Runs on EVERY page load, regardless of notification permission.
+// Purges any old/duplicate service worker registration at this origin
+// and force-refreshes /sw.js so this device is never stuck running a
+// stale copy (which is what causes blank/duplicate or silently-broken
+// push notifications even after clearing Chrome data).
+// ═══════════════════════════════════════════════════════════
+if ('serviceWorker' in navigator) {
+  (async function(){
+    try {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const r of regs) {
+        const url = (r.active && r.active.scriptURL) || (r.installing && r.installing.scriptURL) || (r.waiting && r.waiting.scriptURL) || '';
+        if (url && !url.endsWith('/sw.js')) { await r.unregister(); }
+      }
+      const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+      reg.update().catch(()=>{});
+    } catch (e) { console.error('[RideNaija] SW cleanup error:', e); }
+  })();
+}
 
 // ═══════════════════════════════════════════════════════════
 // FCM PUSH NOTIFICATIONS — request permission, get token, save it
@@ -315,6 +345,25 @@ try{
     if(window.showToast) window.showToast('🔔 ' + title + (body?(' — '+body):''));
   });
 }catch(e){}
+
+// Shows real current state so the rider (or you, debugging remotely) can tell
+// at a glance whether this device is actually set up to receive alerts.
+window._refreshNotifStatus = function(){
+  const el = document.getElementById('notif-live-status');
+  if(!el) return;
+  const perm = ('Notification' in window) ? Notification.permission : 'unsupported';
+  if(perm === 'denied'){
+    el.innerHTML = '❌ Blocked at the browser level. Tap the 🔒/ⓘ icon next to the address bar → Notifications → Allow, then reload this page.';
+    el.style.color = '#e74c3c';
+  } else if(perm === 'granted'){
+    el.textContent = '✅ Enabled — you will receive ride alerts on this device.';
+    el.style.color = '#27ae60';
+  } else {
+    el.textContent = '⏳ Not enabled yet — tap the button below and allow when prompted.';
+    el.style.color = 'var(--muted)';
+  }
+};
+setTimeout(window._refreshNotifStatus, 500);
 // Helper: match names even if order is reversed e.g. "Ibrahim Mohammed" vs "Mohammed Ibrahim"
 window.namesMatch = function(a, b){
   a=(a||'').toLowerCase().trim(); b=(b||'').toLowerCase().trim();
