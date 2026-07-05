@@ -31,6 +31,62 @@
     window._remove = function(r){ return r.remove(); };
     window._onValue = function(r,cb,err){ return r.on('value',cb,err); };
 
+    // 🧪 DIAGNOSTIC: manually send a test push to a specific rider/partner key,
+    // bypassing all assignment logic entirely, and show the exact raw result.
+    // No .catch(function(){}) swallowing here — every outcome is shown.
+    window._diagTestPush = function(){
+      var type = document.getElementById('diag-type').value;
+      var key = document.getElementById('diag-key').value.trim();
+      var out = document.getElementById('diag-result');
+      if(!key){ out.textContent = '❌ Please paste a Firebase key first.'; return; }
+      out.textContent = '⏳ Step 1: reading fcm_tokens/'+type+'/'+key+' ...';
+      db.ref('fcm_tokens/'+type+'/'+key).once('value').then(function(snap){
+        var data = snap.val();
+        if(!data || !data.token){
+          out.textContent = '❌ No token found at fcm_tokens/'+type+'/'+key+'\n\nThis means either:\n- That key is wrong (double-check it against the exact key shown in the database)\n- Or that user hasn\'t logged in since the fcm_tokens write rule was fixed.';
+          return;
+        }
+        out.textContent = '✅ Step 1 OK — token found: '+data.token.substring(0,20)+'...\n⏳ Step 2: calling /api/send-notification ...';
+        fetch('/api/send-notification', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ token: data.token, title:'🧪 Test Notification', body:'If you see this, push delivery works end-to-end.', data:{link:'/index.html'} })
+        }).then(function(r){
+          return r.text().then(function(bodyText){
+            out.textContent = '✅ Step 1 OK — token found.\nStep 2 HTTP status: '+r.status+'\nRaw response: '+bodyText+
+              (r.ok ? '\n\n✅ Function returned success. If the phone still didn\'t receive it, the problem is on the device (permission revoked / stale token / browser closed the subscription) not the backend.' : '\n\n❌ Function returned an error — this is the exact reason nothing is arriving.');
+          });
+        }).catch(function(networkErr){
+          out.textContent = '✅ Step 1 OK — token found.\n❌ Step 2 FAILED — fetch could not even reach the function: '+networkErr.message+'\n\nThis usually means the /api/* redirect isn\'t working on this specific deploy, or you are testing on a different domain than the one this admin page is on. Check the exact URL in your address bar right now.';
+        });
+      }).catch(function(readErr){
+        out.textContent = '❌ Step 1 FAILED — could not even read from the database: '+readErr.message+'\n\nThis points to a Firebase rules problem still blocking reads.';
+      });
+    };
+
+    // 🧪 DIAGNOSTIC: send a test push to the admin_alerts TOPIC (broadcasts to
+    // every admin device currently subscribed — including this one, if this
+    // device successfully subscribed). This tests the topic-broadcast path,
+    // which is separate from the token-based rider/partner path above.
+    window._diagTestAdminTopic = function(){
+      var out = document.getElementById('diag-result');
+      out.textContent = '⏳ Sending test push to admin_alerts topic ...';
+      fetch('/api/send-notification', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ topic:'admin_alerts', title:'🧪 Admin Topic Test', body:'If this device receives it, admin_alerts is working end-to-end.', data:{link:'/admin.html'} })
+      }).then(function(r){
+        return r.text().then(function(bodyText){
+          out.textContent = 'Step HTTP status: '+r.status+'\nRaw response: '+bodyText+
+            (r.ok
+              ? '\n\n✅ Function accepted the request and reported success.\n\nIf THIS device does not show a notification within a few seconds, this device\'s own subscription to admin_alerts is not currently active — re-login on this device (after a full Clear & reset) so it re-subscribes, then run this test again.'
+              : '\n\n❌ Function returned an error — this is the exact reason admin_alerts notifications are not going out to anyone right now.');
+        });
+      }).catch(function(networkErr){
+        out.textContent = '❌ FAILED — fetch could not even reach the function: '+networkErr.message+'\n\nCheck the exact URL in your address bar — you may be testing on a different domain than you think.';
+      });
+    };
+
     // ═══════════════════════════════════════════════════════════
     // FCM PUSH NOTIFICATIONS — admin devices subscribe to "admin_alerts"
     var FCM_VAPID_KEY = 'BCBQljhS54Ve18FV82xljM6bqF6OF6ug7IdS6XR1nAlGz8Cl7-TpHU0p_ES9Jhghelf5i-6IoDsfMjfaZD7Hn4c';
@@ -504,6 +560,23 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
       <!-- FIREBASE STATUS BADGE -->
       <div style="text-align:center;padding:4px 0 8px;">
         <span id="fb-status-badge" style="font-size:0.72rem;font-weight:700;color:var(--muted);">⏳ Connecting to Firebase…</span>
+      </div>
+      <!-- 🧪 NOTIFICATION DIAGNOSTIC TOOL — paste a rider/partner Firebase key and
+           this sends a test push DIRECTLY, bypassing all assignment logic, and
+           shows the exact raw result (no silent catches) so you can pinpoint
+           exactly where a failure is happening. Remove this block once
+           notifications are confirmed stable. -->
+      <div style="background:#1a1a2e;border:1px solid #444;border-radius:10px;padding:12px;margin:10px 0;">
+        <div style="font-weight:700;font-size:0.85rem;margin-bottom:8px;">🧪 Notification Test Tool</div>
+        <select id="diag-type" style="width:100%;padding:8px;border-radius:6px;margin-bottom:6px;">
+          <option value="riders">Rider</option>
+          <option value="partners">Partner</option>
+        </select>
+        <input id="diag-key" type="text" placeholder="Paste Firebase key (e.g. -Ose480y0dodGSoK4U12)" style="width:100%;padding:8px;border-radius:6px;margin-bottom:6px;box-sizing:border-box;">
+        <button onclick="window._diagTestPush()" style="width:100%;padding:10px;border-radius:6px;background:#2980b9;color:#fff;font-weight:700;border:none;">Send Test Push (rider/partner)</button>
+        <div style="height:10px;"></div>
+        <button onclick="window._diagTestAdminTopic()" style="width:100%;padding:10px;border-radius:6px;background:#8e44ad;color:#fff;font-weight:700;border:none;">Send Test Push to admin_alerts (this device)</button>
+        <div id="diag-result" style="margin-top:8px;font-size:0.78rem;white-space:pre-wrap;word-break:break-word;"></div>
       </div>
       <!-- CERTIFICATE -->
       <div class="certificate">
@@ -4013,7 +4086,11 @@ function assignRiderToBooking(bookingKey, selectId){
             body: _routeLine,
             data: { link:'/index.html', bookingId:bookingKey }
           })
-        }).catch(function(){});
+        }).then(function(r){
+          if(!r.ok) { if(window.showToast) window.showToast('⚠️ Push to rider failed (server error)'); }
+        }).catch(function(){ if(window.showToast) window.showToast('⚠️ Push to rider failed (network error)'); });
+      } else {
+        if(window.showToast) window.showToast('⚠️ Rider assigned, but no notification token on file — they may need to reopen the rider app to receive push alerts.');
       }
     }).catch(function(){});
   }
