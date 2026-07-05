@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<title>Join RideNaija – Register as a Rider</title>
+<meta name="theme-color" content="#00b865"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getDatabase, ref, push, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+  // ▼▼▼ Same Firebase config as index.html ▼▼▼
+  const firebaseConfig = {
+    apiKey: "AIzaSyAAGIy2WpDB491rR1M8oCGEzThuMrrJMrA",
+    authDomain: "ridenaija-14d88.firebaseapp.com",
+    databaseURL: "https://ridenaija-14d88-default-rtdb.firebaseio.com",
+    projectId: "ridenaija-14d88",
+    storageBucket: "ridenaija-14d88.firebasestorage.app",
+    messagingSenderId: "75868798616",
+    appId: "1:75868798616:web:eb8ceadb9992fb79ee5aed"
+  };
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+  window._db = db;
+  window._ref = ref;
+  window._push = push;
+  window._set = set;
+  window.fbReady = true;
+</script>
+<style>
+:root{--green:#00b865;--gd:#008f4c;--bg:#0a0f0d;--card:#111a14;--card2:#162019;--border:#1e3326;--text:#e8f5ec;--muted:#6b8f76;--red:#ff4f4f;}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:40px;}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 60% 40% at 80% 10%,rgba(0,184,101,0.09) 0%,transparent 70%);pointer-events:none;z-index:0;}
+
+.topnav{position:sticky;top:0;z-index:100;display:flex;align-items:center;gap:12px;padding:13px 16px;background:rgba(10,15,13,0.94);backdrop-filter:blur(14px);border-bottom:1px solid var(--border);}
+.back-btn{background:transparent;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer;}
+.logo{font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:800;}
+.logo span{color:var(--green);}
+
+.hero{padding:32px 16px 20px;text-align:center;}
+.hero-icon{font-size:3rem;margin-bottom:12px;}
+.hero h1{font-family:'Syne',sans-serif;font-size:1.5rem;font-weight:800;margin-bottom:8px;}
+.hero h1 em{color:var(--green);font-style:normal;}
+.hero p{color:var(--muted);font-size:0.84rem;line-height:1.6;max-width:320px;margin:0 auto;}
+
+.steps-bar{display:flex;justify-content:center;gap:8px;padding:0 16px 24px;}
+.step-dot{width:32px;height:4px;border-radius:2px;background:var(--border);transition:background 0.3s;}
+.step-dot.active{background:var(--green);}
+.step-dot.done{background:var(--gd);}
+
+.form-wrap{padding:0 14px;}
+.step-section{display:none;}
+.step-section.active{display:block;}
+
+.step-title{font-family:'Syne',sans-serif;font-size:1rem;font-weight:800;margin-bottom:4px;}
+.step-sub{font-size:0.75rem;color:var(--muted);margin-bottom:16px;}
+
+.form-group{margin-bottom:12px;}
+.form-group label{display:block;font-size:0.67rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;}
+.form-group input,.form-group select,.form-group textarea{width:100%;background:var(--card2);border:1.5px solid var(--border);border-radius:9px;padding:11px 13px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.86rem;outline:none;-webkit-appearance:none;transition:border-color 0.2s;}
+.form-group input::placeholder,.form-group textarea::placeholder{color:var(--muted);}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--green);}
+.form-group select option{background:#111;}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:9px;}
+
+.vehicle-types{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:4px;}
+.vt{border:1.5px solid var(--border);background:transparent;color:var(--muted);padding:12px 8px;border-radius:11px;cursor:pointer;text-align:center;transition:all 0.2s;}
+.vt .vt-ic{font-size:1.4rem;display:block;margin-bottom:4px;}
+.vt .vt-lb{font-size:0.72rem;font-weight:600;}
+.vt.active{border-color:var(--green);background:rgba(0,184,101,0.1);color:var(--green);}
+
+.goods-types{display:flex;flex-direction:column;gap:6px;margin-bottom:12px;display:none;}
+.goods-types.show{display:flex;}
+.gt{border:1.5px solid var(--border);background:transparent;color:var(--muted);padding:10px 12px;border-radius:10px;cursor:pointer;display:flex;align-items:center;gap:10px;font-size:0.78rem;font-weight:600;transition:all 0.2s;}
+.gt.active{border-color:var(--green);background:rgba(0,184,101,0.1);color:var(--green);}
+
+.next-btn{width:100%;padding:14px;background:linear-gradient(135deg,var(--gd),var(--green));border:none;border-radius:11px;font-family:'Syne',sans-serif;font-size:0.95rem;font-weight:700;color:#000;cursor:pointer;margin-top:8px;}
+.back-step-btn{width:100%;padding:12px;background:transparent;border:1.5px solid var(--border);color:var(--muted);border-radius:11px;font-family:'Syne',sans-serif;font-weight:600;font-size:0.85rem;cursor:pointer;margin-top:8px;}
+
+/* SUCCESS */
+#success-screen{display:none;text-align:center;padding:60px 24px;}
+.success-ico{font-size:4rem;margin-bottom:16px;}
+.success-title{font-family:'Syne',sans-serif;font-size:1.4rem;font-weight:800;color:var(--green);margin-bottom:10px;}
+.success-msg{font-size:0.84rem;color:var(--muted);line-height:1.7;margin-bottom:24px;}
+.home-btn{display:inline-block;padding:13px 28px;background:linear-gradient(135deg,var(--gd),var(--green));border:none;border-radius:11px;font-family:'Syne',sans-serif;font-size:0.9rem;font-weight:700;color:#000;cursor:pointer;text-decoration:none;}
+
+.info-box{background:rgba(0,184,101,0.08);border:1px solid rgba(0,184,101,0.2);border-radius:10px;padding:12px;margin-bottom:14px;font-size:0.76rem;color:var(--muted);line-height:1.5;}
+.info-box strong{color:var(--green);}
+
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--green);color:#000;font-family:'Syne',sans-serif;font-weight:700;padding:9px 20px;border-radius:50px;font-size:0.75rem;z-index:400;opacity:0;transition:opacity 0.3s;white-space:nowrap;pointer-events:none;}
+.toast.show{opacity:1;}
+
+.benefits{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:16px 0;}
+.benefit{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;text-align:center;}
+.benefit .b-ico{font-size:1.3rem;margin-bottom:6px;}
+.benefit .b-title{font-family:'Syne',sans-serif;font-size:0.75rem;font-weight:700;margin-bottom:2px;}
+.benefit .b-sub{font-size:0.65rem;color:var(--muted);}
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <button class="back-btn" onclick="window.location.href='index.html'">‹</button>
+  <div class="logo">Ride<span>Naija</span></div>
+</nav>
+
+<div id="reg-screen">
+  <div class="hero">
+    <div class="hero-icon">🏍️</div>
+    <h1>Join <em>RideNaija</em> as a Rider</h1>
+    <p>Register as a verified operator and start earning money from rides and deliveries near you.</p>
+  </div>
+
+  <!-- BENEFITS -->
+  <div style="padding:0 14px;">
+    <div class="benefits">
+      <div class="benefit"><div class="b-ico">💰</div><div class="b-title">Earn Daily</div><div class="b-sub">Get paid for every ride</div></div>
+      <div class="benefit"><div class="b-ico">📱</div><div class="b-title">Easy Booking</div><div class="b-sub">Customers find you easily</div></div>
+      <div class="benefit"><div class="b-ico">⭐</div><div class="b-title">Build Rating</div><div class="b-sub">5-star riders earn more</div></div>
+      <div class="benefit"><div class="b-ico">🔒</div><div class="b-title">Verified Badge</div><div class="b-sub">Stand out as trusted</div></div>
+    </div>
+  </div>
+
+  <!-- PROGRESS DOTS -->
+  <div class="steps-bar">
+    <div class="step-dot active" id="dot-0"></div>
+    <div class="step-dot" id="dot-1"></div>
+    <div class="step-dot" id="dot-2"></div>
+    <div class="step-dot" id="dot-3"></div>
+  </div>
+
+  <div class="form-wrap">
+
+    <!-- STEP 1: Personal Info -->
+    <div class="step-section active" id="step-0">
+      <div class="step-title">Personal Information</div>
+      <div class="step-sub">Step 1 of 4 — Tell us about yourself</div>
+      <div class="form-group"><label>Full Name</label><input type="text" id="r-name" placeholder="Your full legal name"/></div>
+      <div class="two-col">
+        <div class="form-group"><label>Phone Number</label><input type="tel" id="r-phone" placeholder="080xxxxxxxx"/></div>
+        <div class="form-group"><label>WhatsApp</label><input type="tel" id="r-whatsapp" placeholder="080xxxxxxxx"/></div>
+      </div>
+      <div class="form-group"><label>Email Address</label><input type="email" id="r-email" placeholder="your@email.com"/></div>
+      <div class="two-col">
+        <div class="form-group"><label>State</label>
+          <select id="r-state">
+            <option value="">Select State</option>
+            <option>Lagos</option><option>Abuja (FCT)</option><option>Rivers</option>
+            <option>Kano</option><option>Ogun</option><option>Oyo</option>
+            <option>Anambra</option><option>Enugu</option><option>Delta</option>
+            <option>Edo</option><option>Imo</option><option>Kaduna</option>
+            <option>Plateau</option><option>Borno</option><option>Cross River</option>
+            <option>Akwa Ibom</option><option>Osun</option><option>Ekiti</option>
+            <option>Ondo</option><option>Kwara</option><option>Niger</option>
+            <option>Benue</option><option>Nassarawa</option><option>Kogi</option>
+            <option>Taraba</option><option>Adamawa</option><option>Gombe</option>
+            <option>Bauchi</option><option>Yobe</option><option>Sokoto</option>
+            <option>Zamfara</option><option>Kebbi</option><option>Jigawa</option>
+            <option>Katsina</option><option>Bayelsa</option><option>Abia</option>
+            <option>Ebonyi</option>
+          </select>
+        </div>
+        <div class="form-group"><label>City / Area</label><input type="text" id="r-city" placeholder="e.g. Ikeja"/></div>
+      </div>
+      <button class="next-btn" onclick="nextStep(1)">Continue →</button>
+    </div>
+
+    <!-- STEP 2: Vehicle Info -->
+    <div class="step-section" id="step-1">
+      <div class="step-title">Your Vehicle</div>
+      <div class="step-sub">Step 2 of 4 — Tell us about your vehicle</div>
+
+      <div class="form-group"><label>Vehicle Type</label>
+        <div class="vehicle-types">
+          <div class="vt" onclick="selVehicle(this,'okada')"><span class="vt-ic">🏍️</span><span class="vt-lb">Okada</span></div>
+          <div class="vt" onclick="selVehicle(this,'keke')"><span class="vt-ic">🛺</span><span class="vt-lb">Keke Napep</span></div>
+          <div class="vt" onclick="selVehicle(this,'taxi')"><span class="vt-ic">🚖</span><span class="vt-lb">Taxi (Sedan)</span></div>
+          <div class="vt" onclick="selVehicle(this,'taxi_suv')"><span class="vt-ic">🚙</span><span class="vt-lb">Taxi SUV</span></div>
+          <div class="vt" onclick="selVehicle(this,'royal_sedan')"><span class="vt-ic">👑</span><span class="vt-lb">Royal Sedan</span></div>
+          <div class="vt" onclick="selVehicle(this,'royal_suv')"><span class="vt-ic">👑</span><span class="vt-lb">Royal SUV</span></div>
+          <div class="vt" onclick="selVehicle(this,'royal_hiace')"><span class="vt-ic">👑</span><span class="vt-lb">Royal Hiace Bus</span></div>
+          <div class="vt" onclick="selVehicle(this,'royal_intercity')"><span class="vt-ic">🛣️</span><span class="vt-lb">Inter-City Royal</span></div>
+          <div class="vt" onclick="selVehicle(this,'goods')"><span class="vt-ic">🚛</span><span class="vt-lb">Goods Vehicle</span></div>
+          <div class="vt" onclick="selVehicle(this,'minivan')"><span class="vt-ic">🚐</span><span class="vt-lb">Mini Van</span></div>
+        </div>
+      </div>
+
+      <!-- Goods sub-types -->
+      <div class="goods-types" id="goods-types">
+        <div class="form-group" style="margin-bottom:6px;"><label>Goods Vehicle Category</label></div>
+        <div class="gt" onclick="selGoodsType(this,'royal')">🚚 Cargo Truck (Small)</div>
+        <div class="gt" onclick="selGoodsType(this,'pickup')">🛻 Pickup Truck</div>
+        <div class="gt" onclick="selGoodsType(this,'lorry')">🚚 Lorry / Bedford</div>
+        <div class="gt" onclick="selGoodsType(this,'tipper')">🚜 Tipper Truck</div>
+        <div class="gt" onclick="selGoodsType(this,'trailer')">🚛 Royal Trailer / Artic</div>
+        <div class="gt" onclick="selGoodsType(this,'flatbed')">🏗️ Flatbed / Low-Loader</div>
+      </div>
+
+      <div class="two-col">
+        <div class="form-group"><label>Plate Number</label><input type="text" id="r-plate" placeholder="e.g. LSD-412-YK"/></div>
+        <div class="form-group"><label>Vehicle Colour</label><input type="text" id="r-color" placeholder="e.g. Red"/></div>
+      </div>
+      <div class="form-group"><label>Vehicle Make & Model</label><input type="text" id="r-vehicle" placeholder="e.g. Honda CBR 125, Bajaj Boxer"/></div>
+      <div class="form-group"><label>Year of Manufacture</label><input type="text" id="r-year" placeholder="e.g. 2020"/></div>
+      <button class="next-btn" onclick="nextStep(2)">Continue →</button>
+      <button class="back-step-btn" onclick="prevStep(0)">← Back</button>
+    </div>
+
+    <!-- STEP 3: Documents -->
+    <div class="step-section" id="step-2">
+      <div class="step-title">Documents & Verification</div>
+      <div class="step-sub">Step 3 of 4 — For your safety and customers' trust</div>
+      <div class="info-box">📋 <strong>Required documents:</strong> You don't upload files here. After submitting, the owner will contact you on WhatsApp to collect scanned copies of your documents.</div>
+      <div class="form-group"><label>Government ID Type</label>
+        <select id="r-id-type">
+          <option value="">Select ID Type</option>
+          <option>National ID Card (NIN)</option>
+          <option>Driver's Licence</option>
+          <option>Voter's Card</option>
+          <option>International Passport</option>
+        </select>
+      </div>
+      <div class="form-group"><label>ID Number</label><input type="text" id="r-id-num" placeholder="Enter your ID number"/></div>
+      <div class="form-group"><label>Do you have vehicle papers?</label>
+        <select id="r-papers">
+          <option value="">Select</option>
+          <option value="yes">Yes — I have all vehicle papers</option>
+          <option value="some">Partial — some papers available</option>
+          <option value="no">No — I don't have papers yet</option>
+        </select>
+      </div>
+      <div class="form-group"><label>BVN (optional but speeds up approval)</label><input type="text" id="r-bvn" placeholder="Your BVN number"/></div>
+      <div class="form-group"><label>Bank Name</label>
+        <select id="r-bank">
+          <option value="">Select Bank</option>
+          <option>Access Bank</option><option>GTBank</option><option>Zenith Bank</option>
+          <option>First Bank</option><option>UBA</option><option>Fidelity Bank</option>
+          <option>Sterling Bank</option><option>Wema Bank</option><option>Opay</option>
+          <option>Palmpay</option><option>Kuda Bank</option><option>Other</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Account Number (for receiving payments)</label><input type="text" id="r-acct" placeholder="Your 10-digit account number"/></div>
+      <button class="next-btn" onclick="nextStep(3)">Continue →</button>
+      <button class="back-step-btn" onclick="prevStep(1)">← Back</button>
+    </div>
+
+    <!-- STEP 4: Confirm -->
+    <div class="step-section" id="step-3">
+      <div class="step-title">Almost Done!</div>
+      <div class="step-sub">Step 4 of 4 — Review and submit</div>
+      <div id="summary-box" style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px;font-size:0.8rem;line-height:2;"></div>
+      <div class="info-box">
+        ✅ <strong>What happens next:</strong><br/>
+        1. Your application goes to the owner for review.<br/>
+        2. Owner contacts you on WhatsApp within 24hrs.<br/>
+        3. You submit your document photos via WhatsApp.<br/>
+        4. Once approved, your profile appears in the app.<br/>
+        5. You start receiving ride bookings!
+      </div>
+      <div class="form-group">
+        <label><input type="checkbox" id="r-agree" style="margin-right:8px;accent-color:var(--green);"/>I agree to RideNaija's terms of service and confirm all information is correct.</label>
+      </div>
+      <button class="next-btn" onclick="submitRegistration()">🚀 Submit Application</button>
+      <button class="back-step-btn" onclick="prevStep(2)">← Back</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- SUCCESS SCREEN -->
+<div id="success-screen">
+  <div class="success-ico">🎉</div>
+  <div class="success-title">Application Submitted!</div>
+  <div class="success-msg">
+    Your rider application has been received.<br/><br/>
+    <strong style="color:var(--green);">What happens next:</strong><br/>
+    The RideNaija owner will contact you on WhatsApp within 24 hours to verify your documents.<br/><br/>
+    Once approved, your profile goes live in the app and customers can start booking you immediately!<br/><br/>
+    <strong style="color:var(--green);">Reference: <span id="app-ref"></span></strong>
+  </div>
+  <a href="index.html" class="home-btn">← Back to App</a>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let currentStep = 0;
+let vehicleType = '';
+let goodsSubType = '';
+
+function selVehicle(el, type){
+  document.querySelectorAll('.vt').forEach(v=>v.classList.remove('active'));
+  el.classList.add('active'); vehicleType=type;
+  document.getElementById('goods-types').classList.toggle('show', type==='goods');
+}
+
+function selGoodsType(el, type){
+  document.querySelectorAll('.gt').forEach(g=>g.classList.remove('active'));
+  el.classList.add('active'); goodsSubType=type;
+}
+
+function nextStep(to){
+  // Validate current step
+  if(currentStep===0){
+    const name=document.getElementById('r-name').value.trim();
+    const phone=document.getElementById('r-phone').value.trim();
+    const state=document.getElementById('r-state').value;
+    if(!name||!phone||!state){showToast('⚠️ Fill all required fields');return;}
+  }
+  if(currentStep===1){
+    if(!vehicleType){showToast('⚠️ Select your vehicle type');return;}
+    const plate=document.getElementById('r-plate').value.trim();
+    if(!plate){showToast('⚠️ Enter your plate number');return;}
+  }
+  if(currentStep===2){
+    const idType=document.getElementById('r-id-type').value;
+    const bank=document.getElementById('r-bank').value;
+    const acct=document.getElementById('r-acct').value.trim();
+    if(!idType||!bank||!acct){showToast('⚠️ Fill ID type, bank and account number');return;}
+  }
+  if(to===3) buildSummary();
+  goToStep(to);
+}
+
+function prevStep(to){ goToStep(to); }
+
+function goToStep(n){
+  document.querySelectorAll('.step-section').forEach(s=>s.classList.remove('active'));
+  document.getElementById('step-'+n).classList.add('active');
+  document.querySelectorAll('.step-dot').forEach((d,i)=>{
+    d.classList.remove('active','done');
+    if(i<n) d.classList.add('done');
+    if(i===n) d.classList.add('active');
+  });
+  currentStep=n;
+  window.scrollTo(0,0);
+}
+
+function buildSummary(){
+  const name=document.getElementById('r-name').value;
+  const phone=document.getElementById('r-phone').value;
+  const state=document.getElementById('r-state').value;
+  const city=document.getElementById('r-city').value;
+  const plate=document.getElementById('r-plate').value;
+  const vehicle=document.getElementById('r-vehicle').value;
+  const bank=document.getElementById('r-bank').value;
+  const acct=document.getElementById('r-acct').value;
+  document.getElementById('summary-box').innerHTML=`
+    <div><strong>Name:</strong> ${name}</div>
+    <div><strong>Phone:</strong> ${phone}</div>
+    <div><strong>Location:</strong> ${city}, ${state}</div>
+    <div><strong>Vehicle:</strong> ${vehicleType.toUpperCase()} ${goodsSubType?'('+goodsSubType+')':''}</div>
+    <div><strong>Plate:</strong> ${plate}</div>
+    <div><strong>Vehicle:</strong> ${vehicle}</div>
+    <div><strong>Bank:</strong> ${bank} — ${acct}</div>
+  `;
+}
+
+function submitRegistration(){
+  if(!document.getElementById('r-agree').checked){showToast('⚠️ Please agree to terms');return;}
+  const ref='RN-RIDER-'+Date.now();
+  const data={
+    name: document.getElementById('r-name').value.trim(),
+    phone: document.getElementById('r-phone').value.trim(),
+    whatsapp: document.getElementById('r-whatsapp').value.trim(),
+    email: document.getElementById('r-email').value.trim(),
+    state: document.getElementById('r-state').value,
+    city: document.getElementById('r-city').value.trim(),
+    vehicleType, goodsSubType,
+    plate: document.getElementById('r-plate').value.trim(),
+    color: document.getElementById('r-color').value.trim(),
+    vehicle: document.getElementById('r-vehicle').value.trim(),
+    year: document.getElementById('r-year').value.trim(),
+    idType: document.getElementById('r-id-type').value,
+    idNum: document.getElementById('r-id-num').value.trim(),
+    papers: document.getElementById('r-papers').value,
+    bvn: document.getElementById('r-bvn').value.trim(),
+    bank: document.getElementById('r-bank').value,
+    account: document.getElementById('r-acct').value.trim(),
+    status: 'pending', // owner must approve in admin dashboard
+    trips: 0, rating: 0, emoji: '👨🏿',
+    submittedAt: new Date().toISOString(),
+    ref
+  };
+
+  // Save to Firebase (owner sees this in admin dashboard)
+  if(window.fbReady && window._db){
+    const newRef = window._push(window._ref(window._db,'rider_applications'));
+    window._set(newRef, data).then(()=>{
+      showSuccess(ref);
+    }).catch(()=>{
+      // Firebase not set up yet — save locally
+      saveLocally(data, ref);
+    });
+  } else {
+    saveLocally(data, ref);
+  }
+}
+
+function saveLocally(data, ref){
+  const apps = JSON.parse(localStorage.getItem('rn_rider_apps')||'[]');
+  apps.unshift(data);
+  localStorage.setItem('rn_rider_apps', JSON.stringify(apps));
+  showSuccess(ref);
+}
+
+function showSuccess(ref){
+  document.getElementById('reg-screen').style.display='none';
+  document.getElementById('success-screen').style.display='block';
+  document.getElementById('app-ref').textContent=ref;
+}
+
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2700);}
+</script>
+</body>
+</html>
