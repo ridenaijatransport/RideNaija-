@@ -64,23 +64,23 @@
       });
     };
 
-    // 🧪 DIAGNOSTIC: send a test push to the admin_alerts TOPIC (broadcasts to
+    // 🧪 DIAGNOSTIC: send a test push to the admin_alerts_v2 TOPIC (broadcasts to
     // every admin device currently subscribed — including this one, if this
     // device successfully subscribed). This tests the topic-broadcast path,
     // which is separate from the token-based rider/partner path above.
     window._diagTestAdminTopic = function(){
       var out = document.getElementById('diag-result');
-      out.textContent = '⏳ Sending test push to admin_alerts topic ...';
+      out.textContent = '⏳ Sending test push to admin_alerts_v2 topic ...';
       fetch('/api/send-notification', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ topic:'admin_alerts', title:'🧪 Admin Topic Test', body:'If this device receives it, admin_alerts is working end-to-end.', data:{link:'/admin.html'} })
+        body: JSON.stringify({ topic:'admin_alerts_v2', title:'🧪 Admin Topic Test', body:'If this device receives it, admin_alerts_v2 is working end-to-end.', data:{link:'/admin.html'} })
       }).then(function(r){
         return r.text().then(function(bodyText){
           out.textContent = 'Step HTTP status: '+r.status+'\nRaw response: '+bodyText+
             (r.ok
-              ? '\n\n✅ Function accepted the request and reported success.\n\nIf THIS device does not show a notification within a few seconds, this device\'s own subscription to admin_alerts is not currently active — re-login on this device (after a full Clear & reset) so it re-subscribes, then run this test again.'
-              : '\n\n❌ Function returned an error — this is the exact reason admin_alerts notifications are not going out to anyone right now.');
+              ? '\n\n✅ Function accepted the request and reported success.\n\nIf THIS device does not show a notification within a few seconds, this device\'s own subscription to admin_alerts_v2 is not currently active — re-login on this device (after a full Clear & reset) so it re-subscribes, then run this test again.'
+              : '\n\n❌ Function returned an error — this is the exact reason admin_alerts_v2 notifications are not going out to anyone right now.');
         });
       }).catch(function(networkErr){
         out.textContent = '❌ FAILED — fetch could not even reach the function: '+networkErr.message+'\n\nCheck the exact URL in your address bar — you may be testing on a different domain than you think.';
@@ -88,7 +88,7 @@
     };
 
     // ═══════════════════════════════════════════════════════════
-    // FCM PUSH NOTIFICATIONS — admin devices subscribe to "admin_alerts"
+    // FCM PUSH NOTIFICATIONS — admin devices subscribe to "admin_alerts_v2"
     var FCM_VAPID_KEY = 'BCBQljhS54Ve18FV82xljM6bqF6OF6ug7IdS6XR1nAlGz8Cl7-TpHU0p_ES9Jhghelf5i-6IoDsfMjfaZD7Hn4c';
     var _fcmReady = false;
 
@@ -163,7 +163,7 @@
           fetch('/api/subscribe-topic', {
             method:'POST',
             headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({ token: prevToken, topic: 'admin_alerts', action: 'unsubscribe' })
+            body: JSON.stringify({ token: prevToken, topic: 'admin_alerts_v2', action: 'unsubscribe' })
           }).catch(function(){});
         }
         localStorage.setItem('rn_admin_fcm_token', token);
@@ -171,7 +171,7 @@
         var resp = await fetch('/api/subscribe-topic', {
           method:'POST',
           headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ token: token, topic: 'admin_alerts' })
+          body: JSON.stringify({ token: token, topic: 'admin_alerts_v2' })
         });
         var result = await resp.json();
         if(result.success){
@@ -575,7 +575,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
         <input id="diag-key" type="text" placeholder="Paste Firebase key (e.g. -Ose480y0dodGSoK4U12)" style="width:100%;padding:8px;border-radius:6px;margin-bottom:6px;box-sizing:border-box;">
         <button onclick="window._diagTestPush()" style="width:100%;padding:10px;border-radius:6px;background:#2980b9;color:#fff;font-weight:700;border:none;">Send Test Push (rider/partner)</button>
         <div style="height:10px;"></div>
-        <button onclick="window._diagTestAdminTopic()" style="width:100%;padding:10px;border-radius:6px;background:#8e44ad;color:#fff;font-weight:700;border:none;">Send Test Push to admin_alerts (this device)</button>
+        <button onclick="window._diagTestAdminTopic()" style="width:100%;padding:10px;border-radius:6px;background:#8e44ad;color:#fff;font-weight:700;border:none;">Send Test Push to admin_alerts_v2 (this device)</button>
         <div id="diag-result" style="margin-top:8px;font-size:0.78rem;white-space:pre-wrap;word-break:break-word;"></div>
       </div>
       <!-- CERTIFICATE -->

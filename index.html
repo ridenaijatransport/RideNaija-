@@ -4602,7 +4602,7 @@ function submitMarketOrder(){
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
-        topic: 'admin_alerts',
+        topic: 'admin_alerts_v2',
         title: '🛒 New Market Order — Needs Rider',
         body: market+' → '+addr+' · ₦'+total.toLocaleString(),
         data: { link:'/admin.html', bookingId:orderId }
@@ -4870,12 +4870,12 @@ function placeFoodOrder(){
         }
       }).catch(function(){});
 
-      // Notify admin devices subscribed to admin_alerts — a new order needs a rider assigned
+      // Notify admin devices subscribed to admin_alerts_v2 — a new order needs a rider assigned
       fetch('/api/send-notification', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
-          topic: 'admin_alerts',
+          topic: 'admin_alerts_v2',
           title: '🍽️ New Food Order — Needs Rider',
           body: cart.rstName+' → '+addr+' · ₦'+grand.toLocaleString(),
           data: { link:'/admin.html', bookingId:bkKey }

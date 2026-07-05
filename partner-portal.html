@@ -687,7 +687,7 @@ function submitRideBooking(){
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
-        topic: 'admin_alerts',
+        topic: 'admin_alerts_v2',
         title: '🏨 New Hotel Booking — Needs Rider',
         body: currentPartner.name+': '+pickup+' → '+dest+' · ₦'+fare.toLocaleString(),
         data: { link:'/admin.html', bookingId:key }
@@ -765,7 +765,7 @@ function submitDeliveryBooking(){
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
-        topic: 'admin_alerts',
+        topic: 'admin_alerts_v2',
         title: '📦 New Delivery Order — Needs Rider',
         body: vendor+' → '+dest+' · ₦'+fee.toLocaleString(),
         data: { link:'/admin.html', bookingId:key }
@@ -890,7 +890,7 @@ function confirmFoodOrder(fbKey, encPhone, encItems, encAddr, total){
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      topic: 'admin_alerts',
+      topic: 'admin_alerts_v2',
       title: '✅ Order Confirmed — Assign Rider',
       body: currentPartner.name + ' confirmed order → ' + addr + ' · ₦' + (total||0).toLocaleString(),
       data: { link: '/admin.html', bookingId: fbKey }
