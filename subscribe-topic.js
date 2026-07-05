@@ -46,6 +46,20 @@ exports.handler = async function (event) {
 
     console.log('[RideNaija] topic subscription result:', JSON.stringify(result));
 
+    // CRITICAL: admin.messaging().subscribeToTopic() can return HTTP 200 with
+    // successCount:0/failureCount:1 when the token itself was rejected (bad
+    // format, expired, wrong project). That is a REAL failure even though
+    // nothing threw — if we don't check it here, the client shows "✅ Enabled"
+    // for a device that was never actually subscribed to the topic.
+    if (result.failureCount > 0) {
+      const errDetail = (result.errors && result.errors[0] && result.errors[0].error && result.errors[0].error.message) || 'Token rejected by FCM';
+      console.error('[RideNaija] subscribe-topic PER-TOKEN FAILURE:', errDetail);
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ success: false, error: errDetail, successCount: result.successCount, failureCount: result.failureCount })
+      };
+    }
+
     return {
       statusCode: 200,
       body: JSON.stringify({ success: true, successCount: result.successCount, failureCount: result.failureCount })

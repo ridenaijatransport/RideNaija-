@@ -198,8 +198,10 @@
         var result = await resp.json();
         if(result.success){
           _fcmReady = true;
+          localStorage.setItem('rn_admin_topic_ok', '1');
           _showNotifStatus('✅ Notifications ready! You will receive alerts.', '#27ae60');
         } else {
+          localStorage.setItem('rn_admin_topic_ok', '0');
           _showNotifStatus('❌ Subscribe failed: ' + (result.error||'unknown error'), '#c0392b');
         }
         messaging.onMessage(function(payload){
@@ -227,12 +229,16 @@
       if(!el) return;
       var perm = ('Notification' in window) ? Notification.permission : 'unsupported';
       var hasToken = !!localStorage.getItem('rn_admin_fcm_token');
+      var topicOk = localStorage.getItem('rn_admin_topic_ok');
       if(perm === 'denied'){
         el.innerHTML = '❌ Blocked at the browser level. Tap the 🔒/ⓘ icon next to the address bar → Notifications → Allow, then reload this page.';
         el.style.color = '#e74c3c';
-      } else if(perm === 'granted' && hasToken){
+      } else if(perm === 'granted' && hasToken && topicOk === '1'){
         el.textContent = '✅ Enabled — this device is registered for alerts.';
         el.style.color = '#27ae60';
+      } else if(perm === 'granted' && hasToken && topicOk === '0'){
+        el.textContent = '❌ Token saved but the server rejected the subscription — tap Enable again, or check Netlify function logs.';
+        el.style.color = '#e74c3c';
       } else if(perm === 'granted' && !hasToken){
         el.textContent = '⚠️ Permission granted but no token saved yet — tap Enable below.';
         el.style.color = '#f39c12';
