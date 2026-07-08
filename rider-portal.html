@@ -427,6 +427,17 @@ function showToast(msg){
 }
 
 function riderLogin(){
+  // Ask for notification permission IMMEDIATELY, synchronously, as the very
+  // first thing this click does — before the Firebase lookup below, which is
+  // a real network round-trip. Some browsers only honor requestPermission()
+  // reliably when it's called directly inside a click handler; calling it
+  // after an await/network callback can silently lose that "user gesture"
+  // context and the prompt never appears. This just locks in the decision
+  // early; the actual token fetch + save still happens further down once we
+  // know which rider this is.
+  if('Notification' in window && Notification.permission === 'default'){
+    Notification.requestPermission().catch(function(){});
+  }
   const phone = document.getElementById('rphone').value.trim();
   const err = document.getElementById('rerr');
   if(!phone || phone.length < 10){

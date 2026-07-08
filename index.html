@@ -1768,6 +1768,12 @@ function fmt(n){return'₦'+parseFloat(n).toLocaleString('en-NG',{minimumFractio
 // Owner dashboard accessed directly via admin.html file
 
 function quickRiderLogin(){
+  // Prime the permission prompt synchronously on click, before the async
+  // Firebase lookup further down — some browsers only reliably show the
+  // prompt when requestPermission() is called directly from a user gesture.
+  if('Notification' in window && Notification.permission === 'default'){
+    Notification.requestPermission().catch(()=>{});
+  }
   const phone = document.getElementById('rp-phone').value.trim();
   const err = document.getElementById('rp-err');
   if(!phone||phone.length<10){
@@ -3723,6 +3729,11 @@ function doPaystackWithRider(email,phone,pickup,dest,rider){
 }
 
 function completeBooking(pickup,dest,phone,pay,fare,ref,chosenRider){
+  // Prime the permission prompt as early as possible in this click-triggered
+  // flow — cheap and harmless if permission is already decided either way.
+  if('Notification' in window && Notification.permission === 'default'){
+    Notification.requestPermission().catch(()=>{});
+  }
   // ══ UNIVERSAL DEDUPLICATION GUARD ══════════════════════════════════
   // Layer 1: Paystack/Wallet refs — checked against saved refs list
   const _normRef = (ref||'').replace(/^RN-RECOVERY-/,'');
