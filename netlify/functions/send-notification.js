@@ -28,8 +28,12 @@ function buildMessage(title, body, data) {
       ...(data || {})
     },
     webpush: {
-      headers: { Urgency: 'high' },
-      fcmOptions: { link: (data && data.link) || '/index.html' }
+      headers: { Urgency: 'high' }
+      // NOTE: intentionally no fcmOptions.link here — Firebase requires that
+      // to be a full HTTPS URL, not a relative path, and getting it wrong
+      // makes the ENTIRE send throw and fail silently. sw.js already handles
+      // click-through navigation itself in its notificationclick listener
+      // using the relative `data.link` above, so this isn't needed.
     }
   };
 }
