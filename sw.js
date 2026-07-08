@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ridenaija-v23';
+const CACHE_NAME = 'ridenaija-v24';
 const ASSETS = ['/', '/index.html', '/admin.html', '/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -25,55 +25,47 @@ self.addEventListener('fetch', e => {
 });
 
 // ═══════════════════════════════════════════════════════════
-// FIREBASE CLOUD MESSAGING — background push notifications
-// This is the ONLY service worker file in the whole app. Every portal
-// (admin/index/rider-portal/partner-portal) registers this exact same
-// file at the exact same scope, so there is only ever one SW registration
-// for the origin. Registering more than one script at the same scope was
-// the root cause of duplicate/inconsistent push notifications.
+// PUSH NOTIFICATIONS — handled directly, without firebase-messaging-compat.js
+//
+// Why: that library listens for the 'push' event internally and eventually
+// calls showNotification() on our behalf, but it doesn't always signal back
+// to the browser fast/reliably enough that the event has been fully handled.
+// Chrome REQUIRES every push to result in a notification, and if it isn't
+// sure one is coming in time, it shows its own generic fallback ("This site
+// has been updated in the background") as a safety net — right alongside
+// the real one a moment later. That's the duplicate you were seeing.
+//
+// Handling the raw 'push' event ourselves and wrapping it in event.waitUntil()
+// removes that ambiguity entirely: Chrome can see, directly, that we already
+// committed to showing exactly one notification for this event.
 // ═══════════════════════════════════════════════════════════
-importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
-
-firebase.initializeApp({
-  apiKey: "AIzaSyAAGIy2WpDB491rR1M8oCGEzThuMrrJMrA",
-  authDomain: "ridenaija-14d88.firebaseapp.com",
-  databaseURL: "https://ridenaija-14d88-default-rtdb.firebaseio.com",
-  projectId: "ridenaija-14d88",
-  storageBucket: "ridenaija-14d88.firebasestorage.app",
-  messagingSenderId: "75868798616",
-  appId: "1:75868798616:web:eb8ceadb9992fb79ee5aed"
-});
-
-const messaging = firebase.messaging();
-
-// Fires when a push arrives and the app is not in the foreground
-// (closed, minimized, or a different browser tab is active)
-// NOTE: the backend (netlify/functions/send-notification.js) sends a
-// DATA-ONLY payload (message.data, not message.notification) on purpose —
-// that's what stops the browser from auto-displaying its own unstyled
-// notification. So this handler must read payload.data, not payload.notification.
-messaging.onBackgroundMessage(function (payload) {
-  const data = payload.data || {};
-  const title = data.title || 'RideNaija';
-  // De-duplication: give every notification a stable "tag" derived from the
-  // booking it's about (or the title, if there's no booking id). If the same
-  // event ever gets delivered more than once to this device — a leftover old
-  // registration, a retried send, a topic fan-out hitting a stale token that
-  // is technically still "this device" — the browser REPLACES the existing
-  // notification with the same tag instead of stacking a second one next to
-  // it. This is what stops the "one blank + one with content" duplicate.
-  const tag = 'rn-' + (data.bookingId || data.link || title);
-  const options = {
-    body: data.body || '',
-    icon: '/icons/icon-192.png',
-    badge: '/icons/icon-192.png',
-    data: { link: data.link || '/index.html' },
-    vibrate: [200, 100, 200],
-    tag: tag,
-    renotify: true
-  };
-  self.registration.showNotification(title, options);
+self.addEventListener('push', function (event) {
+  event.waitUntil((async function () {
+    let data = {};
+    try {
+      const payload = event.data ? event.data.json() : {};
+      data = payload.data || payload || {};
+    } catch (e) {
+      console.error('[RideNaija] push payload parse error:', e);
+    }
+    const title = data.title || 'RideNaija';
+    // De-duplication: give every notification a stable "tag" derived from the
+    // booking it's about (or the title, if there's no booking id). If the same
+    // event is ever delivered more than once to this device, the browser
+    // REPLACES the existing notification with the same tag instead of
+    // stacking a second one next to it.
+    const tag = 'rn-' + (data.bookingId || data.link || title);
+    const options = {
+      body: data.body || '',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      data: { link: data.link || '/index.html' },
+      vibrate: [200, 100, 200],
+      tag: tag,
+      renotify: true
+    };
+    return self.registration.showNotification(title, options);
+  })());
 });
 
 // Tapping a notification focuses an existing tab if one is open, else opens a new one
