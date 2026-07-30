@@ -1319,7 +1319,10 @@ input:checked+.slider::before{transform:translateX(18px);}
 
 <!-- ══ RIDER PORTAL FULLSCREEN ══ -->
 <div class="fullscreen-sub" id="fs-rider-portal">
-  <div class="back-bar" onclick="closeFullscreen('rider-portal')"><span class="back-ic">‹</span><span class="back-title">Rider Portal</span></div>
+  <div class="back-bar" style="display:flex;justify-content:space-between;align-items:center;">
+    <div onclick="closeFullscreen('rider-portal')" style="display:flex;align-items:center;cursor:pointer;"><span class="back-ic">‹</span><span class="back-title">Rider Portal</span></div>
+    <button id="rp-logout-btn" onclick="riderPortalLogout()" style="display:none;background:transparent;border:1px solid var(--border);color:var(--muted);font-size:0.72rem;padding:6px 12px;border-radius:8px;cursor:pointer;font-family:'DM Sans',sans-serif;margin-right:10px;">Logout</button>
+  </div>
   <div style="padding:14px;">
     <div id="rp-login-box" style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:14px;">
       <div style="font-family:'Syne',sans-serif;font-size:1rem;font-weight:800;margin-bottom:4px;">🏍️ Rider Login</div>
@@ -1356,6 +1359,15 @@ input:checked+.slider::before{transform:translateX(18px);}
       <div id="rp-company-earnings" style="display:none;margin-bottom:14px;">
         <div style="font-family:'Syne',sans-serif;font-size:0.88rem;font-weight:800;margin-bottom:8px;">🏢 My Company Earnings</div>
         <div id="rp-company-earnings-content"><div style="text-align:center;padding:12px;color:var(--muted);font-size:0.76rem;">⏳ Loading earnings…</div></div>
+      </div>
+
+      <!-- MY DELIVERIES LOG (only for company/logistics riders assigned parcels) -->
+      <div id="rp-delivery-log-section" style="display:none;margin-bottom:14px;">
+        <div style="font-family:'Syne',sans-serif;font-size:0.88rem;font-weight:800;margin-bottom:8px;">📦 My Deliveries Log</div>
+        <div id="rp-delivery-log-summary" style="background:var(--card);border:1px solid rgba(79,158,255,0.25);border-radius:12px;padding:12px;margin-bottom:10px;">
+          <div style="text-align:center;padding:8px;color:var(--muted);font-size:0.76rem;">Loading your deliveries…</div>
+        </div>
+        <div id="rp-delivery-log-list"></div>
       </div>
       <div style="font-family:'Syne',sans-serif;font-size:0.88rem;font-weight:800;margin-bottom:8px;">🏠 My Dedicated Subscription <span id="rp-ded-badge" style="display:none;background:#4f9eff;color:#000;font-size:0.6rem;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:4px;">1</span></div>
       <div id="rp-dedicated" style="margin-bottom:14px;"></div>
@@ -1836,6 +1848,30 @@ function quickRiderLogin(){
     // Set currentRider globally so renderRiderBks and riderBookingCard can access it
     window.currentRider = {...rider, fbKey: key};
 
+    // Show the Logout button now that a rider is actually logged in
+    const logoutBtn = document.getElementById('rp-logout-btn');
+    if(logoutBtn) logoutBtn.style.display = 'inline-block';
+
+    // ═══════════════════════════════════════════════════════════
+    // PRESENCE — mark this rider ONLINE while this dashboard is open, exactly
+    // like rider-portal.html does, so customers only ever see riders who are
+    // genuinely active right now. This is the path most riders actually use
+    // (via their profile in the app), so it needs the same tracking as the
+    // standalone rider-portal.html.
+    // ═══════════════════════════════════════════════════════════
+    if(key){
+      const presenceRef = window.firebaseDB.ref('presence/riders/'+key);
+      window.firebaseDB.ref('.info/connected').on('value', function(snap){
+        if(snap.val() === true){
+          presenceRef.onDisconnect().set({ online: false, lastSeen: firebase.database.ServerValue.TIMESTAMP })
+            .then(function(){
+              presenceRef.set({ online: true, lastSeen: firebase.database.ServerValue.TIMESTAMP });
+            });
+        }
+      });
+      window._embeddedPresenceRef = presenceRef;
+    }
+
     // Ask for push notification permission and save the token against this rider's record
     if(key) window.requestNotificationPermission('fcm_tokens/riders/'+key);
 
@@ -1882,6 +1918,77 @@ function quickRiderLogin(){
   doRiderLogin();
 }
 
+function riderPortalLogout(){
+  // Mark offline immediately rather than waiting for onDisconnect to fire —
+  // a clean logout shouldn't have to wait for a connection-drop detection.
+  if(window._embeddedPresenceRef){
+    window._embeddedPresenceRef.set({ online: false, lastSeen: firebase.database.ServerValue.TIMESTAMP }).catch(()=>{});
+  }
+  window.currentRider = null;
+  const logoutBtn = document.getElementById('rp-logout-btn');
+  if(logoutBtn) logoutBtn.style.display = 'none';
+  document.getElementById('rp-content').style.display = 'none';
+  document.getElementById('rp-login-box').style.display = 'block';
+  const phoneEl = document.getElementById('rp-phone');
+  if(phoneEl) phoneEl.value = '';
+  const errEl = document.getElementById('rp-err');
+  if(errEl) errEl.style.display = 'none';
+  showToast('👋 Logged out');
+}
+
+// ═══════════════════════════════════════════════════════════
+// MY DELIVERIES LOG (embedded rider dashboard version) — mirrors the same
+// read-only reference log in rider-portal.html: counts delivered parcels,
+// shows a plain count × rate estimate, never touches settlement/payout logic.
+// ═══════════════════════════════════════════════════════════
+window.FB_LOGISTICS_SETTINGS = window.FB_LOGISTICS_SETTINGS || {};
+if(window.firebaseReady && window.firebaseDB){
+  window.firebaseOnValue(window.firebaseRef(window.firebaseDB,'logistics_settings'), function(snap){
+    window.FB_LOGISTICS_SETTINGS = snap.val() || {};
+    if(window._rpLastMineForDeliveryLog) renderDeliveryLogInApp(window._rpLastMineForDeliveryLog);
+  });
+}
+
+function renderDeliveryLogInApp(bookings){
+  window._rpLastMineForDeliveryLog = bookings;
+  const summaryEl = document.getElementById('rp-delivery-log-summary');
+  const listEl = document.getElementById('rp-delivery-log-list');
+  if(!summaryEl || !listEl) return;
+
+  const delivered = bookings.filter(function(b){
+    return b.source==='parcel_intake' && (b.rideStatus==='completed'||b.rideStatus==='delivered');
+  }).sort(function(a,b){ return new Date(b.time||0) - new Date(a.time||0); });
+
+  const bonusRate = (window.FB_LOGISTICS_SETTINGS && window.FB_LOGISTICS_SETTINGS.parcelBonusPerDelivery) || 200;
+
+  const now = new Date();
+  const weekStart = new Date(now); weekStart.setDate(now.getDate() - now.getDay()); weekStart.setHours(0,0,0,0);
+  const thisWeek = delivered.filter(function(b){ return new Date(b.time||0) >= weekStart; });
+  const weekEstimate = thisWeek.length * bonusRate;
+
+  summaryEl.innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:center;">'
+    + '<div><div style="font-size:0.62rem;color:var(--muted);">This week</div><div style="font-family:\'Syne\',sans-serif;font-size:1.3rem;font-weight:800;color:#4f9eff;">' + thisWeek.length + ' delivered</div></div>'
+    + '<div style="text-align:right;"><div style="font-size:0.62rem;color:var(--muted);">Estimated bonus</div><div style="font-family:\'Syne\',sans-serif;font-size:1.3rem;font-weight:800;color:var(--green);">₦' + weekEstimate.toLocaleString() + '</div></div>'
+    + '</div>'
+    + '<div style="font-size:0.62rem;color:var(--muted);margin-top:8px;text-align:center;">₦' + bonusRate.toLocaleString() + ' per delivery · estimate for your reference — confirm actual payout with your owner</div>';
+
+  if(!delivered.length){
+    listEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--muted);font-size:0.76rem;">No completed deliveries logged yet.</div>';
+    return;
+  }
+
+  listEl.innerHTML = delivered.slice(0,50).map(function(b){
+    const t = new Date(b.time);
+    const dateStr = isNaN(t) ? (b.time||'—') : t.toLocaleDateString('en-NG',{weekday:'short',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+    return '<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">'
+      + '<div style="min-width:0;"><div style="font-size:0.78rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (b.destination||'—') + '</div>'
+      + '<div style="font-size:0.65rem;color:var(--muted);">' + dateStr + ' · ' + (b.fbKey||'') + '</div></div>'
+      + '<div style="font-size:0.76rem;font-weight:700;color:var(--green);white-space:nowrap;margin-left:8px;">+₦' + bonusRate.toLocaleString() + '</div>'
+      + '</div>';
+  }).join('');
+}
+
 function loadRiderBookingsInApp(riderName, normalised){
   const box=document.getElementById('rp-bookings');
   const histBox=document.getElementById('rp-history');
@@ -1902,6 +2009,11 @@ function loadRiderBookingsInApp(riderName, normalised){
       const matchCKey  = myCompanyKey && b.companyRiderKey===myCompanyKey;
       return matchPhone||matchName||matchKey||matchCKey;
     }).sort((a,b)=>new Date(b.time)-new Date(a.time));
+
+    const isCompanyRiderNow = _cr.riderType==='company' || !!_cr.companyRiderKey;
+    const deliveryLogSection = document.getElementById('rp-delivery-log-section');
+    if(deliveryLogSection) deliveryLogSection.style.display = isCompanyRiderNow ? 'block' : 'none';
+    if(isCompanyRiderNow) renderDeliveryLogInApp(mine);
 
     const active=mine.filter(b=>b.rideStatus!=='completed'&&!b.riderPaid);
     const history=mine.filter(b=>b.rideStatus==='completed'||b.riderPaid);
