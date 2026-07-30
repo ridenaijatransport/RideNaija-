@@ -17,3 +17,11 @@
   [headers.values]
     Cache-Control = "no-cache, no-store, must-revalidate"
 
+# All HTML pages: never let the browser's own HTTP cache serve a stale copy
+# either, independent of the service worker fix. Two layers of protection
+# against the exact "deployed but not showing" problem.
+[[headers]]
+  for = "/*.html"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+

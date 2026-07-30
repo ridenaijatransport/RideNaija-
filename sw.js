@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ridenaija-v24';
+const CACHE_NAME = 'ridenaija-v25';
 const ASSETS = ['/', '/index.html', '/admin.html', '/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -15,8 +15,23 @@ self.addEventListener('activate', e => {
   self.clients.claim();
 });
 
+// NETWORK-FIRST (was cache-first). This is the fix for a real bug: with
+// cache-first, a saved copy of index.html/admin.html only ever got refreshed
+// when sw.js itself also changed — so an update to just index.html could
+// silently never reach a returning visitor even after a fully successful
+// deploy, no matter how many times the page was reloaded. Network-first
+// means every visit with a connection gets the true latest version; the
+// cache is only ever used as a fallback when there's genuinely no network,
+// which is the only thing a service worker cache should be protecting
+// against for HTML pages.
 self.addEventListener('fetch', e => {
-  e.respondWith(caches.match(e.request).then(cached => cached || fetch(e.request).catch(() => caches.match('/index.html'))));
+  e.respondWith(
+    fetch(e.request).then(networkResponse => {
+      const respClone = networkResponse.clone();
+      caches.open(CACHE_NAME).then(cache => cache.put(e.request, respClone)).catch(() => {});
+      return networkResponse;
+    }).catch(() => caches.match(e.request).then(cached => cached || caches.match('/index.html')))
+  );
 });
 
 // ═══════════════════════════════════════════════════════════
