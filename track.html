@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Track Your Order – RideNaija</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<style>
+  :root{
+    --bg:#0a0f0d; --card:#121a17; --card2:#1a2420; --border:#243530;
+    --text:#eafff2; --muted:#7d9389; --green:#00b865; --yellow:#ffaa00; --red:#ff5b5b; --blue:#4f9eff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;padding:20px 14px 60px;}
+  .wrap{max-width:460px;margin:0 auto;}
+  .logo{font-family:'Syne',sans-serif;font-weight:800;font-size:1.3rem;text-align:center;margin-bottom:4px;}
+  .logo span{color:var(--green);}
+  .tagline{text-align:center;font-size:0.72rem;color:var(--muted);margin-bottom:22px;}
+  .search-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px;}
+  .search-card label{font-size:0.72rem;color:var(--muted);display:block;margin-bottom:6px;font-weight:600;}
+  .search-row{display:flex;gap:8px;}
+  .search-row input{flex:1;padding:12px;border-radius:9px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-size:0.85rem;font-family:'DM Sans',sans-serif;}
+  .search-row button{padding:12px 18px;border-radius:9px;border:none;background:var(--green);color:#000;font-weight:800;font-family:'Syne',sans-serif;font-size:0.82rem;cursor:pointer;white-space:nowrap;}
+  .search-row button:disabled{opacity:0.6;}
+  #msg{font-size:0.76rem;color:var(--muted);text-align:center;margin-top:10px;min-height:1.2em;}
+  #result{display:none;}
+  .result-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:14px;}
+  .rc-id{font-size:0.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;}
+  .rc-route{font-family:'Syne',sans-serif;font-weight:700;font-size:0.95rem;margin-bottom:14px;line-height:1.5;}
+  .steps{display:flex;justify-content:space-between;position:relative;margin:22px 0 8px;}
+  .steps::before{content:'';position:absolute;top:14px;left:20px;right:20px;height:2px;background:var(--border);z-index:0;}
+  .step{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;flex:1;}
+  .step-dot{width:28px;height:28px;border-radius:50%;background:var(--card2);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:0.85rem;margin-bottom:6px;transition:all 0.3s;}
+  .step-label{font-size:0.6rem;color:var(--muted);text-align:center;font-weight:600;}
+  .step.done .step-dot{background:var(--green);border-color:var(--green);color:#000;}
+  .step.done .step-label{color:var(--green);}
+  .step.current .step-dot{background:var(--blue);border-color:var(--blue);color:#fff;animation:pulse 1.5s infinite;}
+  .step.current .step-label{color:var(--blue);}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(79,158,255,0.5);}50%{box-shadow:0 0 0 8px rgba(79,158,255,0);}}
+  .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px;}
+  .info-box{background:var(--card2);border-radius:9px;padding:10px;}
+  .info-box .lbl{font-size:0.6rem;color:var(--muted);margin-bottom:3px;}
+  .info-box .val{font-size:0.82rem;font-weight:700;}
+  .rider-box{margin-top:10px;background:rgba(0,184,101,0.07);border:1px solid rgba(0,184,101,0.2);border-radius:9px;padding:10px;font-size:0.78rem;}
+  .updated{text-align:center;font-size:0.65rem;color:var(--muted);margin-top:12px;}
+  .live-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);margin-right:4px;animation:pulse 1.2s infinite;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo">Ride<span>Naija</span></div>
+  <div class="tagline">Track your delivery in real time</div>
+
+  <div class="search-card">
+    <label for="track-input">Enter your Tracking ID</label>
+    <div class="search-row">
+      <input id="track-input" type="text" placeholder="e.g. DELIVERY_202607281530_1234" autocapitalize="characters"/>
+      <button id="track-btn" onclick="doTrack()">Track</button>
+    </div>
+    <div id="msg"></div>
+  </div>
+
+  <div id="result">
+    <div class="result-card">
+      <div class="rc-id" id="rc-id"></div>
+      <div class="rc-route" id="rc-route"></div>
+
+      <div class="steps" id="steps"></div>
+
+      <div class="info-grid">
+        <div class="info-box"><div class="lbl">Type</div><div class="val" id="rc-type">—</div></div>
+        <div class="info-box"><div class="lbl">Amount</div><div class="val" id="rc-amount">—</div></div>
+      </div>
+
+      <div class="rider-box" id="rider-box" style="display:none;"></div>
+
+      <div class="updated" id="rc-updated"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyAAGIy2WpDB491rR1M8oCGEzThuMrrJMrA",
+    authDomain: "ridenaija-14d88.firebaseapp.com",
+    databaseURL: "https://ridenaija-14d88-default-rtdb.firebaseio.com",
+    projectId: "ridenaija-14d88",
+    storageBucket: "ridenaija-14d88.firebasestorage.app",
+    messagingSenderId: "75868798616",
+    appId: "1:75868798616:web:eb8ceadb9992fb79ee5aed"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+
+  let _liveRef = null;
+
+  const STAGES = [
+    { key: 'order_placed', label: 'Order Placed', icon: '🏷️' },
+    { key: 'picked_up',    label: 'Picked Up',    icon: '📦' },
+    { key: 'in_transit',   label: 'In Transit',   icon: '🚚' },
+    { key: 'delivered',    label: 'Delivered',    icon: '✅' }
+  ];
+
+  function computeEffectiveStage(b){
+    // "Delivered" is derived from the same completion signal the rest of the
+    // app already uses (rideStatus/isPaid), rather than requiring a separate
+    // write — so this always reflects reality even for orders placed before
+    // this tracker existed.
+    if(b.rideStatus==='completed' || b.rideStatus==='delivered' || b.isPaid) return 'delivered';
+    return b.deliveryStage || 'order_placed';
+  }
+
+  function renderSteps(effectiveStage){
+    const idx = STAGES.findIndex(s => s.key === effectiveStage);
+    const stepsEl = document.getElementById('steps');
+    stepsEl.innerHTML = STAGES.map(function(s, i){
+      const cls = i < idx ? 'done' : i === idx ? 'current' : '';
+      return '<div class="step '+cls+'">'
+        + '<div class="step-dot">'+(i < idx ? '✓' : s.icon)+'</div>'
+        + '<div class="step-label">'+s.label+'</div>'
+        + '</div>';
+    }).join('');
+  }
+
+  function renderResult(b, key){
+    document.getElementById('result').style.display = 'block';
+    document.getElementById('rc-id').textContent = '🏷️ ' + key;
+
+    const pickup = b.pickup || b.vendor || '—';
+    const dest = b.destination || '—';
+    document.getElementById('rc-route').textContent = '📍 ' + pickup + '  →  🎯 ' + dest;
+
+    const effectiveStage = computeEffectiveStage(b);
+    renderSteps(effectiveStage);
+
+    const typeLabel = b.source==='food_order' ? '🍽️ Food Delivery'
+      : b.source==='market_order' || b.type==='market' ? '🛒 Market Order'
+      : b.source==='delivery_partner' ? '📦 Package Delivery'
+      : '🚗 Ride';
+    document.getElementById('rc-type').textContent = typeLabel;
+    document.getElementById('rc-amount').textContent = '₦' + (b.fare||0).toLocaleString();
+
+    const riderBox = document.getElementById('rider-box');
+    if(b.riderName){
+      riderBox.style.display = 'block';
+      riderBox.innerHTML = '🏍️ Rider: <strong>' + b.riderName + '</strong>' + (b.riderPhone ? ' · ' + b.riderPhone : '');
+    } else {
+      riderBox.style.display = 'block';
+      riderBox.innerHTML = '⏳ Waiting for a rider to be assigned...';
+    }
+
+    const updatedAt = b.deliveryStageUpdatedAt || b.time;
+    if(updatedAt){
+      try {
+        document.getElementById('rc-updated').innerHTML = '<span class="live-dot"></span>Live · last updated ' + new Date(updatedAt).toLocaleString('en-NG',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+      } catch(e){}
+    }
+  }
+
+  function doTrack(){
+    const input = document.getElementById('track-input');
+    const btn = document.getElementById('track-btn');
+    const msg = document.getElementById('msg');
+    const key = input.value.trim();
+    if(!key){ msg.textContent = '⚠️ Please enter your tracking ID'; return; }
+
+    btn.disabled = true; btn.textContent = 'Searching...';
+    msg.textContent = '';
+    document.getElementById('result').style.display = 'none';
+
+    if(_liveRef) { _liveRef.off(); _liveRef = null; }
+
+    // Direct lookup by key — this only fetches the ONE booking requested,
+    // not the whole bookings dataset, so it's safe to expose on a public page.
+    db.ref('bookings/' + key).once('value').then(function(snap){
+      btn.disabled = false; btn.textContent = 'Track';
+      const data = snap.val();
+      if(!data){
+        msg.textContent = '❌ No order found with that tracking ID. Please check and try again.';
+        return;
+      }
+      msg.textContent = '';
+      renderResult(data, key);
+
+      // Keep listening so the page updates live if the customer leaves it open
+      _liveRef = db.ref('bookings/' + key);
+      _liveRef.on('value', function(liveSnap){
+        const liveData = liveSnap.val();
+        if(liveData) renderResult(liveData, key);
+      });
+    }).catch(function(err){
+      btn.disabled = false; btn.textContent = 'Track';
+      msg.textContent = '❌ Could not check right now — please try again in a moment.';
+    });
+  }
+
+  document.getElementById('track-input').addEventListener('keypress', function(e){
+    if(e.key === 'Enter') doTrack();
+  });
+
+  // Auto-fill and auto-search from ?id= in the URL (used by WhatsApp confirmation links)
+  window.addEventListener('load', function(){
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('id');
+    if(id){
+      document.getElementById('track-input').value = id;
+      doTrack();
+    }
+  });
+</script>
+</body>
+</html>

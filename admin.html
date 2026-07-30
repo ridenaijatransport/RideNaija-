@@ -21,13 +21,21 @@
   };
   try {
     firebase.initializeApp(cfg);
+    var db = firebase.database();
+    window._db = db;
+    window.fbReady = true;
+    window._ref = function(d,p){ return d.ref(p); };
+    window._set = function(r,v){ return r.set(v); };
+    window._push = function(r,v){ return r.push(v); };
+    window._update = function(r,v){ return r.update(v); };
+    window._remove = function(r){ return r.remove(); };
+    window._onValue = function(r,cb,err){ return r.on('value',cb,err); };
 
     // ═══════════════════════════════════════════════════════════
     // Runs on EVERY page load, regardless of notification permission.
     // Purges any old/duplicate service worker registration at this origin
     // and force-refreshes /sw.js so this device is never stuck running a
-    // stale copy (which is what causes blank/duplicate or silently-broken
-    // push notifications even after clearing Chrome data).
+    // stale copy.
     // ═══════════════════════════════════════════════════════════
     if ('serviceWorker' in navigator) {
       (async function(){
@@ -43,23 +51,10 @@
         } catch (e) { console.error('[RideNaija] SW cleanup error:', e); }
       })();
     }
-    var db = firebase.database();
-    window._db = db;
-    window.fbReady = true;
-    window._ref = function(d,p){ return d.ref(p); };
-    window._set = function(r,v){ return r.set(v); };
-    window._push = function(r,v){ return r.push(v); };
-    window._update = function(r,v){ return r.update(v); };
-    window._remove = function(r){ return r.remove(); };
-    window._onValue = function(r,cb,err){ return r.on('value',cb,err); };
 
     // ═══════════════════════════════════════════════════════════
     // FCM PUSH NOTIFICATIONS — admin devices save their token directly to
     // fcm_tokens/admins/{token}, same pattern as riders/partners already use.
-    // No topics, no broadcast groups — the backend loops over every token in
-    // that path and sends to each one directly (see send-notification.js),
-    // which means a bad/expired token can never silently swallow delivery to
-    // everyone else, and there is nothing to "subscribe" that can fail quietly.
     // ═══════════════════════════════════════════════════════════
     var FCM_VAPID_KEY = 'BCBQljhS54Ve18FV82xljM6bqF6OF6ug7IdS6XR1nAlGz8Cl7-TpHU0p_ES9Jhghelf5i-6IoDsfMjfaZD7Hn4c';
 
@@ -100,6 +95,7 @@
       window.requestAdminNotifications();
     };
 
+
     db.ref('bookings').on('value', function(snap) {
       window.FB_BOOKINGS = snap.val() ? Object.entries(snap.val()).map(function(e){return Object.assign({},e[1],{fbKey:e[0]});}).reverse() : [];
       window.FB_BOOKINGS_LOADED = true;  // mark that Firebase has delivered at least one snapshot
@@ -122,6 +118,14 @@
       if(window.refreshBookingsUI) window.refreshBookingsUI();
       if(window.refreshStatsUI) window.refreshStatsUI();
       if(window.refreshRevenueUI) window.refreshRevenueUI();
+    });
+    // PRESENCE — live online/offline status per rider, written by rider-portal.html.
+    // Exposed as window.FB_RIDER_PRESENCE for any admin UI that wants to show it;
+    // intentionally does not filter or change any existing rider list/dispatch
+    // logic here — admin retains full visibility and manual override ability.
+    db.ref('presence/riders').on('value', function(snap) {
+      window.FB_RIDER_PRESENCE = snap.val() || {};
+      if(window.refreshRidersUI) window.refreshRidersUI();
     });
     db.ref('rider_applications').on('value', function(snap) {
       window.FB_APPS = snap.val() ? Object.entries(snap.val()).map(function(e){return Object.assign({},e[1],{fbKey:e[0]});}) : [];
@@ -447,6 +451,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
     <button class="dtab" onclick="switchTab('riders')">🏍️ Riders</button>
     <button class="dtab" onclick="switchTab('applications')">📋 Applications</button>
     <button class="dtab" onclick="switchTab('bookings')">🚗 Bookings <span id="bookings-tab-badge" style="display:none;background:#f97316;color:#fff;border-radius:10px;padding:1px 7px;font-size:0.6rem;font-weight:800;margin-left:2px;vertical-align:middle;">0</span></button>
+    <button class="dtab" onclick="switchTab('parcels')">📦 Parcels <span id="parcels-tab-badge" style="display:none;background:#f97316;color:#fff;border-radius:10px;padding:1px 7px;font-size:0.6rem;font-weight:800;margin-left:2px;vertical-align:middle;">0</span></button>
     <button class="dtab" onclick="switchTab('dedicated')">📅 Dedicated</button>
     <button class="dtab" onclick="switchTab('revenue')">💸 Revenue</button>
     <button class="dtab" onclick="switchTab('withdrawals')">💳 Withdrawals</button>
@@ -1067,6 +1072,69 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
       <!-- Hidden elements to prevent JS errors from removed section -->
       <span id="pending-pay-count" style="display:none;"></span>
       <div id="pending-payment-list" style="display:none;"></div>
+    </div>
+
+    <!-- ══ PARCELS TAB (Jiji/Temu/3rd-party parcel intake → dispatch to company riders) ══ -->
+    <div class="tab-panel" id="tab-parcels">
+      <div style="height:8px;"></div>
+
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:14px;">
+        <div style="font-family:'Syne',sans-serif;font-size:0.88rem;font-weight:800;margin-bottom:8px;">📦 Parcel Intake</div>
+        <div style="font-size:0.72rem;color:var(--muted);line-height:1.6;">Log parcels arriving at your office from Jiji, Temu, or any other sender, then dispatch them straight to one of your own company riders. Each parcel gets the same live tracking page as your other deliveries.</div>
+      </div>
+
+      <!-- LOGISTICS RIDER PAY — a completely separate, isolated setting from
+           your main pricing system, on purpose. It only feeds the delivery
+           bonus estimate riders see in their own portal — nothing here
+           touches fares, commission splits, or any existing settlement math. -->
+      <div style="background:var(--card);border:1px solid rgba(79,158,255,0.3);border-radius:14px;padding:14px;margin-bottom:14px;">
+        <div style="font-family:'Syne',sans-serif;font-size:0.85rem;font-weight:800;margin-bottom:6px;">💰 Logistics Rider Pay</div>
+        <div style="font-size:0.7rem;color:var(--muted);line-height:1.6;margin-bottom:10px;">For riders on monthly salary plus a per-delivery bonus. This rate only controls what your company riders see as their delivery bonus estimate in their own portal — it's informational for you and them, not wired into any automatic payout.</div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <span style="font-size:0.78rem;color:var(--muted);white-space:nowrap;">₦</span>
+          <input id="logi-bonus-rate" type="number" min="0" placeholder="200" style="flex:1;padding:9px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--text);">
+          <span style="font-size:0.72rem;color:var(--muted);white-space:nowrap;">per delivery</span>
+          <button onclick="saveLogisticsBonusRate()" style="padding:9px 16px;border-radius:8px;background:#4f9eff;color:#fff;font-weight:700;border:none;white-space:nowrap;">Save</button>
+        </div>
+      </div>
+
+      <!-- SINGLE PARCEL FORM -->
+      <div class="form-card" style="margin-bottom:14px;">
+        <div style="font-weight:700;font-size:0.82rem;margin-bottom:10px;">➕ Log a Single Parcel</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <select id="pcl-sender" onchange="togglePclSenderOther()" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--text);">
+            <option value="Jiji">Jiji</option>
+            <option value="Temu">Temu</option>
+            <option value="Other">Other</option>
+          </select>
+          <input id="pcl-sender-other" type="text" placeholder="Sender name (if Other)" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--text);display:none;">
+        </div>
+        <input id="pcl-ext-tracking" type="text" placeholder="Sender's tracking # (optional)" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--text);margin-bottom:8px;box-sizing:border-box;">
+        <input id="pcl-recipient-name" type="text" placeholder="Recipient name" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--text);margin-bottom:8px;box-sizing:border-box;">
+        <input id="pcl-recipient-phone" type="tel" placeholder="Recipient phone" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--text);margin-bottom:8px;box-sizing:border-box;">
+        <input id="pcl-address" type="text" placeholder="Delivery address" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--text);margin-bottom:8px;box-sizing:border-box;">
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <input id="pcl-fee" type="number" min="0" placeholder="Delivery fee ₦ (optional)" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--text);">
+        </div>
+        <textarea id="pcl-notes" placeholder="Notes (optional) — package size, special instructions, etc." style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--text);margin-bottom:10px;box-sizing:border-box;min-height:50px;font-family:'DM Sans',sans-serif;"></textarea>
+        <button onclick="logSingleParcel()" style="width:100%;padding:11px;border-radius:8px;background:var(--green);color:#000;font-weight:800;border:none;font-family:'Syne',sans-serif;">📦 Log Parcel</button>
+      </div>
+
+      <!-- BATCH IMPORT -->
+      <div class="form-card" style="margin-bottom:14px;">
+        <div style="font-weight:700;font-size:0.82rem;margin-bottom:8px;">📋 Batch Import (paste a list)</div>
+        <div style="font-size:0.68rem;color:var(--muted);margin-bottom:8px;line-height:1.6;">One parcel per line, fields separated by a pipe <code>|</code>:<br><span style="color:var(--text);">Sender | Tracking# | Recipient Name | Phone | Address | Fee</span><br>Leave Tracking# or Fee blank if not applicable — just leave that spot empty between the pipes.</div>
+        <textarea id="pcl-batch-input" placeholder="Jiji | JJ12345 | Amaka Obi | 08031234567 | 12 Allen Ave, Ikeja | 800
+Temu | | Chuka Eze | 08059876543 | 5 Ademola St, VI | 800" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--text);margin-bottom:10px;box-sizing:border-box;min-height:100px;font-family:monospace;font-size:0.75rem;"></textarea>
+        <button onclick="logBatchParcels()" style="width:100%;padding:11px;border-radius:8px;background:#4f9eff;color:#fff;font-weight:800;border:none;font-family:'Syne',sans-serif;">📋 Import All Parcels</button>
+        <div id="pcl-batch-result" style="margin-top:8px;font-size:0.72rem;color:var(--muted);"></div>
+      </div>
+
+      <!-- PARCEL LIST -->
+      <div class="dash-sec">
+        <div class="dash-sec-title">📦 All Parcels <span class="ds-badge" id="parcels-count"></span></div>
+        <div id="parcels-list"><div style="text-align:center;padding:20px;color:var(--muted);font-size:0.78rem;">Loading parcels...</div></div>
+      </div>
     </div>
 
     <!-- ══ REVENUE TAB ══ -->
@@ -1850,6 +1918,7 @@ function switchTab(name){
   if(name==='partners'){ setTimeout(loadPartnerSummary, 300); setTimeout(loadMarketOrders, 400); }
   event.target.classList.add('active');
   if(name==='bookings'){ loadBookings(); loadRestaurantPayables(); }
+  if(name==='parcels') loadParcels();
   if(name==='dedicated') loadDedicated();
   if(name==='withdrawals') loadWithdrawals();
   if(name==='fleet') loadFleet();
@@ -2198,7 +2267,7 @@ function loadRiders(){
       <div style="display:flex;align-items:center;gap:11px;width:100%;">
         <div class="ri-av">${r.emoji||'👨🏿'}</div>
         <div class="ri-inf">
-          <div class="ri-nm">${r.name||'Rider'}</div>
+          <div class="ri-nm">${r.name||'Rider'} ${r.riderType==='company' ? '<span style="background:rgba(79,158,255,0.15);border:1px solid #4f9eff;border-radius:12px;padding:2px 8px;font-size:0.6rem;font-weight:700;color:#4f9eff;margin-left:6px;vertical-align:middle;">🏢 Company</span>' : ''}</div>
           <div class="ri-meta">
             <span>${(r.vehicleType||r.type||'okada')==='royal'?'Cargo Truck':(r.vehicleType||r.type||'okada')} ${r.plate?'· '+r.plate:''}</span>
             <span>📞 ${r.phone||'—'}</span>
@@ -3992,8 +4061,177 @@ function assignRiderToBooking(bookingKey, selectId){
   }
   const assignMsg = isFoodBk ? '✅ '+riderName+' dispatched — order marked Out for Delivery' : '✅ '+riderName+' assigned to booking';
   showToast(assignMsg);
-  setTimeout(()=>{ loadBookings(); loadRevenue(); loadFleet(); }, 600);
+  setTimeout(()=>{ loadBookings(); loadRevenue(); loadFleet(); if(window.loadParcels) loadParcels(); }, 600);
 }
+
+// ═══════════════════════════════════════════════════════════
+// PARCEL INTAKE — for 3rd-party partners (Jiji, Temu, etc.) who drop parcels
+// at your office for your own company riders to deliver. Reuses the exact
+// same bookings collection, deliveryStage tracker, and assignRiderToBooking()
+// dispatch function already used everywhere else — so every parcel gets a
+// live customer tracking page (track.html) for free, and dispatch behaves
+// identically to every other booking type (marks rider busy, sends FCM, etc).
+// ═══════════════════════════════════════════════════════════
+function togglePclSenderOther(){
+  const sel = document.getElementById('pcl-sender');
+  const otherEl = document.getElementById('pcl-sender-other');
+  otherEl.style.display = sel.value === 'Other' ? 'block' : 'none';
+}
+
+function _buildParcelBooking(sender, extTracking, recName, recPhone, address, fee, notes){
+  const now = new Date();
+  const minute = now.toISOString().slice(0,16).replace(/[^0-9]/g,'');
+  const key = 'PARCEL_' + minute + '_' + (recPhone||'0000').slice(-4) + '_' + Math.floor(Math.random()*90+10);
+  return {
+    key: key,
+    data: {
+      source: 'parcel_intake',
+      sender: sender || 'Other',
+      externalTrackingNumber: extTracking || '',
+      pickup: 'RideNaija Office',
+      destination: address,
+      recipientName: recName,
+      guestName: recName,
+      phone: recPhone,
+      custPhone: recPhone,
+      fare: fee || 0,
+      deliveryFee: fee || 0,
+      notes: notes || '',
+      payMethod: 'N/A',
+      rideStatus: 'pending',
+      status: 'active',
+      deliveryStage: 'order_placed',
+      deliveryStageUpdatedAt: now.toISOString(),
+      riderName: '', riderPhone: '',
+      time: now.toISOString()
+    }
+  };
+}
+
+function logSingleParcel(){
+  const senderSel = document.getElementById('pcl-sender').value;
+  const senderOther = (document.getElementById('pcl-sender-other').value||'').trim();
+  const sender = senderSel === 'Other' ? (senderOther || 'Other') : senderSel;
+  const extTracking = (document.getElementById('pcl-ext-tracking').value||'').trim();
+  const recName = (document.getElementById('pcl-recipient-name').value||'').trim();
+  const recPhone = (document.getElementById('pcl-recipient-phone').value||'').trim();
+  const address = (document.getElementById('pcl-address').value||'').trim();
+  const fee = parseInt(document.getElementById('pcl-fee').value||'0') || 0;
+  const notes = (document.getElementById('pcl-notes').value||'').trim();
+
+  if(!recName || !recPhone || !address){
+    showToast('⚠️ Recipient name, phone, and address are required');
+    return;
+  }
+  if(!window.fbReady || !window._db){ showToast('⚠️ Not connected to database yet — try again in a moment'); return; }
+
+  const parcel = _buildParcelBooking(sender, extTracking, recName, recPhone, address, fee, notes);
+  window._db.ref('bookings/'+parcel.key).set(parcel.data).then(function(){
+    showToast('✅ Parcel logged — tracking ID: ' + parcel.key);
+    ['pcl-ext-tracking','pcl-recipient-name','pcl-recipient-phone','pcl-address','pcl-fee','pcl-notes'].forEach(function(id){
+      const el = document.getElementById(id); if(el) el.value = '';
+    });
+    document.getElementById('pcl-sender-other').style.display = 'none';
+    loadParcels();
+  }).catch(function(e){
+    showToast('❌ Could not log parcel: ' + e.message);
+  });
+}
+
+function logBatchParcels(){
+  const raw = document.getElementById('pcl-batch-input').value;
+  const resultEl = document.getElementById('pcl-batch-result');
+  const lines = raw.split('\n').map(function(l){ return l.trim(); }).filter(function(l){ return l.length; });
+  if(!lines.length){ resultEl.textContent = '⚠️ Paste at least one line first.'; return; }
+  if(!window.fbReady || !window._db){ resultEl.textContent = '⚠️ Not connected to database yet — try again in a moment.'; return; }
+
+  let success = 0, failed = 0;
+  const writes = lines.map(function(line){
+    const parts = line.split('|').map(function(p){ return p.trim(); });
+    const [sender, extTracking, recName, recPhone, address, feeStr] = parts;
+    if(!recName || !recPhone || !address){ failed++; return Promise.resolve(); }
+    const fee = parseInt(feeStr||'0') || 0;
+    const parcel = _buildParcelBooking(sender, extTracking, recName, recPhone, address, fee, '');
+    return window._db.ref('bookings/'+parcel.key).set(parcel.data).then(function(){ success++; }).catch(function(){ failed++; });
+  });
+
+  Promise.all(writes).then(function(){
+    resultEl.innerHTML = '✅ Imported ' + success + ' parcel' + (success!==1?'s':'') + (failed ? '. ⚠️ ' + failed + ' line' + (failed!==1?'s':'') + ' skipped (missing name/phone/address, or use the Sender | Tracking# | Name | Phone | Address | Fee format).' : '.');
+    document.getElementById('pcl-batch-input').value = '';
+    loadParcels();
+  });
+}
+
+function saveLogisticsBonusRate(){
+  const rate = parseInt(document.getElementById('logi-bonus-rate').value) || 0;
+  if(!window.fbReady || !window._db){ showToast('⚠️ Not connected to database yet'); return; }
+  window._db.ref('logistics_settings').update({ parcelBonusPerDelivery: rate }).then(function(){
+    showToast('✅ Logistics bonus rate saved: ₦' + rate + '/delivery');
+  }).catch(function(e){
+    showToast('❌ Could not save: ' + e.message);
+  });
+}
+
+window.loadParcels = function(){
+  // Populate the isolated logistics bonus rate field
+  if(window.fbReady && window._db){
+    window._db.ref('logistics_settings/parcelBonusPerDelivery').once('value').then(function(snap){
+      const rateEl = document.getElementById('logi-bonus-rate');
+      if(rateEl && snap.val()!==null) rateEl.value = snap.val();
+    }).catch(function(){});
+  }
+  const listEl = document.getElementById('parcels-list');
+  const countEl = document.getElementById('parcels-count');
+  if(!listEl || !window.fbReady || !window._db) return;
+  window._db.ref('bookings').orderByChild('source').equalTo('parcel_intake').once('value').then(function(snap){
+    const data = snap.val() || {};
+    const parcels = Object.entries(data).map(function(e){ return Object.assign({}, e[1], {fbKey: e[0]}); })
+      .sort(function(a,b){ return new Date(b.time||0) - new Date(a.time||0); });
+
+    if(countEl) countEl.textContent = parcels.length;
+    const badge = document.getElementById('parcels-tab-badge');
+    const pendingCount = parcels.filter(function(p){ return !p.riderName; }).length;
+    if(badge){ badge.style.display = pendingCount ? 'inline-block' : 'none'; badge.textContent = pendingCount; }
+
+    if(!parcels.length){
+      listEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);font-size:0.78rem;">No parcels logged yet.</div>';
+      return;
+    }
+
+    const companyRiders = (window.FB_RIDERS||[]).filter(function(r){ return r.riderType==='company' && r.status!=='suspended'; });
+
+    listEl.innerHTML = parcels.map(function(p){
+      const effStage = (p.rideStatus==='completed'||p.rideStatus==='delivered') ? 'delivered' : (p.deliveryStage||'order_placed');
+      const stageLabel = effStage==='delivered' ? '✅ Delivered' : effStage==='in_transit' ? '🚚 In Transit' : effStage==='picked_up' ? '📦 Picked Up' : '🏷️ Order Placed';
+      const stageColor = effStage==='delivered' ? 'var(--green)' : effStage==='in_transit'||effStage==='picked_up' ? '#4f9eff' : 'var(--muted)';
+      const selId = 'pcl-assign-' + p.fbKey;
+      const assignHtml = p.riderName
+        ? '<div style="font-size:0.72rem;color:var(--green);margin-top:6px;">🏍️ Assigned: ' + p.riderName + (p.riderPhone?' · '+p.riderPhone:'') + '</div>'
+        : '<div style="display:flex;gap:6px;margin-top:8px;">'
+          + '<select id="'+selId+'" style="flex:1;padding:8px;border-radius:7px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-size:0.75rem;">'
+          + '<option value="">Assign company rider...</option>'
+          + companyRiders.map(function(r){ return '<option value="'+r.fbKey+'" data-name="'+(r.name||'')+'" data-phone="'+(r.phone||'')+'">'+(r.name||'Rider')+'</option>'; }).join('')
+          + '</select>'
+          + '<button onclick="assignRiderToBooking(\''+p.fbKey+'\',\''+selId+'\')" style="padding:8px 14px;border-radius:7px;background:var(--green);color:#000;font-weight:700;border:none;font-size:0.72rem;white-space:nowrap;">Assign</button>'
+          + '</div>'
+          + (companyRiders.length===0 ? '<div style="font-size:0.65rem;color:var(--muted);margin-top:4px;">No company riders on file yet — add one under Fleet.</div>' : '');
+
+      return '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px;">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'
+        + '<span style="font-size:0.68rem;color:var(--muted);">🏷️ ' + p.fbKey + '</span>'
+        + '<span style="font-size:0.68rem;font-weight:700;color:'+stageColor+';">' + stageLabel + '</span>'
+        + '</div>'
+        + '<div style="font-size:0.82rem;font-weight:700;margin-bottom:4px;">' + (p.sender||'Other') + (p.externalTrackingNumber ? ' · #'+p.externalTrackingNumber : '') + '</div>'
+        + '<div style="font-size:0.76rem;color:var(--muted);margin-bottom:4px;">👤 ' + (p.recipientName||'—') + ' · 📞 ' + (p.phone||'—') + '</div>'
+        + '<div style="font-size:0.76rem;color:var(--muted);">📍 Office → 🎯 ' + (p.destination||'—') + '</div>'
+        + (p.notes ? '<div style="font-size:0.7rem;color:var(--muted);margin-top:4px;font-style:italic;">📝 ' + p.notes + '</div>' : '')
+        + assignHtml
+        + '</div>';
+    }).join('');
+  }).catch(function(e){
+    listEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--red);font-size:0.78rem;">Could not load parcels: ' + e.message + '</div>';
+  });
+};
 
 function recordSubPayment(){
   const riderName = (document.getElementById('rec-rider').value||'').trim();

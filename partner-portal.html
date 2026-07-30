@@ -22,13 +22,6 @@
   try {
     firebase.initializeApp(cfg);
 
-    // ═══════════════════════════════════════════════════════════
-    // Runs on EVERY page load, regardless of notification permission.
-    // Purges any old/duplicate service worker registration at this origin
-    // and force-refreshes /sw.js so this device is never stuck running a
-    // stale copy (which is what causes blank/duplicate or silently-broken
-    // push notifications even after clearing Chrome data).
-    // ═══════════════════════════════════════════════════════════
     if ('serviceWorker' in navigator) {
       (async function(){
         try {
@@ -324,6 +317,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
       <button class="ptab active" id="ptab-ride" onclick="switchPTab('ride',this)">🚗 Ride</button>
       <button class="ptab" id="ptab-delivery" onclick="switchPTab('delivery',this)">📦 Delivery</button>
       <button class="ptab" id="ptab-orders" onclick="switchPTab('orders',this)">🍽️ Orders <span id="ptab-orders-badge" style="display:none;background:#f97316;color:#fff;border-radius:10px;padding:1px 6px;font-size:0.6rem;margin-left:2px;">0</span></button>
+      <button class="ptab" id="ptab-menu" onclick="switchPTab('menu',this)">📋 Menu</button>
       <button class="ptab" id="ptab-history" onclick="switchPTab('history',this)">📋 History</button>
     </div>
 
@@ -485,6 +479,51 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
       <div id="pp-orders-list"><div style="text-align:center;padding:20px;color:var(--muted);font-size:0.78rem;">Loading orders...</div></div>
     </div>
 
+    <!-- PANEL: MY MENU / PRODUCTS (partners manage their own catalog here) -->
+    <div class="panel" id="pp-menu">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div>
+          <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:0.92rem;">📋 My Menu / Products</div>
+          <div style="font-size:0.62rem;color:var(--muted);margin-top:2px;">Customers browsing the Shop tab see exactly this list, live.</div>
+        </div>
+        <button onclick="loadMyMenu()" style="padding:5px 10px;background:var(--card);border:1px solid var(--border);border-radius:7px;font-size:0.7rem;color:var(--muted);cursor:pointer;font-family:'DM Sans',sans-serif;">🔄 Refresh</button>
+      </div>
+
+      <div class="form-card" style="margin-bottom:12px;">
+        <div style="font-weight:700;font-size:0.8rem;margin-bottom:8px;">🏪 My Business Category</div>
+        <div style="font-size:0.68rem;color:var(--muted);margin-bottom:8px;">Controls which filter tab customers find you under.</div>
+        <div style="display:flex;gap:8px;">
+          <select id="pp-vendor-category" style="flex:1;padding:9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);">
+            <option value="Food">🍽️ Food</option>
+            <option value="Groceries">🛒 Groceries</option>
+            <option value="Fashion">👗 Fashion</option>
+            <option value="Electronics">📱 Electronics</option>
+            <option value="Other">✨ Other</option>
+          </select>
+          <button onclick="saveMyVendorCategory()" style="padding:9px 16px;border-radius:8px;background:#4f9eff;color:#fff;font-weight:700;border:none;white-space:nowrap;">Save</button>
+        </div>
+      </div>
+
+      <div class="form-card" style="margin-bottom:12px;">
+        <div style="font-weight:700;font-size:0.8rem;margin-bottom:8px;">➕ Add an item</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <input id="pp-menu-emoji" type="text" placeholder="🍔" maxlength="4" style="width:56px;text-align:center;padding:10px 4px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:1.1rem;">
+          <input id="pp-menu-name" type="text" placeholder="Item name (e.g. Jollof Rice + Chicken)" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);">
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <input id="pp-menu-price" type="number" min="1" placeholder="Price (₦)" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);">
+          <button onclick="addMyMenuItem()" style="padding:10px 18px;border-radius:8px;background:var(--green);color:#fff;font-weight:700;border:none;white-space:nowrap;">Add Item</button>
+        </div>
+        <div>
+          <label style="font-size:0.68rem;color:var(--muted);display:block;margin-bottom:6px;">📷 Photo (optional — falls back to the emoji above if skipped)</label>
+          <input id="pp-menu-photo-file" type="file" accept="image/*" style="width:100%;font-size:0.72rem;color:var(--muted);">
+          <div id="pp-menu-photo-status" style="font-size:0.65rem;color:var(--muted);margin-top:4px;"></div>
+        </div>
+      </div>
+
+      <div id="pp-menu-list"><div style="text-align:center;padding:20px;color:var(--muted);font-size:0.78rem;">Loading your menu...</div></div>
+    </div>
+
     <!-- PANEL: HISTORY -->
     <div class="panel" id="pp-history">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
@@ -597,6 +636,7 @@ function switchPTab(name, btn){
   document.getElementById('pp-'+name).classList.add('active');
   if(name==='history') loadHistory();
   if(name==='orders') loadFoodOrders();
+  if(name==='menu') loadMyMenu();
 }
 
 function loadStats(){
@@ -614,6 +654,178 @@ function getMyBookings(){
   if(!window.fbReady || !window._db) return [];
   // We'll pull live from Firebase on load
   return window._partnerBks || [];
+}
+
+// ═══════════════════════════════════════════════════════════
+// MY MENU — lets a restaurant partner manage their own food menu directly,
+// instead of needing the RideNaija admin to add/remove items for them.
+// Matched to a restaurants/ record by name (same convention already used
+// to route incoming food orders to the right partner). If no restaurant
+// record exists yet for this partner's name, one is created automatically
+// the first time they open this tab, so there's nothing for the admin to
+// set up in advance.
+// ═══════════════════════════════════════════════════════════
+window._myRestaurantKey = null;
+
+function findOrCreateMyRestaurant(cb){
+  if(!window.fbReady || !window._db || !currentPartner){ cb(null); return; }
+  window._db.ref('restaurants').once('value').then(function(snap){
+    var data = snap.val() || {};
+    var match = Object.entries(data).find(function(e){
+      return (e[1].name||'').toLowerCase().trim() === (currentPartner.name||'').toLowerCase().trim();
+    });
+    if(match){
+      window._myRestaurantKey = match[0];
+      cb(match[1]);
+    } else {
+      var newRef = window._db.ref('restaurants').push();
+      var entry = { name: currentPartner.name, emoji:'🍽️', category:'Food', location:'', phone:'', deliveryFee:500, state:'', menu:{}, active:true, created:new Date().toISOString() };
+      newRef.set(entry).then(function(){
+        window._myRestaurantKey = newRef.key;
+        cb(entry);
+      }).catch(function(){ cb(null); });
+    }
+  }).catch(function(){ cb(null); });
+}
+
+function loadMyMenu(){
+  var listEl = document.getElementById('pp-menu-list');
+  if(!listEl) return;
+  listEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);font-size:0.78rem;">Loading your menu...</div>';
+  findOrCreateMyRestaurant(function(rst){
+    if(!rst){
+      listEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);font-size:0.78rem;">Could not load your menu — check your connection and try Refresh.</div>';
+      return;
+    }
+    var catEl = document.getElementById('pp-vendor-category');
+    if(catEl) catEl.value = rst.category || 'Food';
+    renderMyMenuList(rst);
+  });
+}
+
+function saveMyVendorCategory(){
+  var cat = document.getElementById('pp-vendor-category').value;
+  function doSave(){
+    window._db.ref('restaurants/'+window._myRestaurantKey).update({ category: cat }).then(function(){
+      if(window.showToast) window.showToast('✅ Category saved: ' + cat);
+    }).catch(function(e){
+      if(window.showToast) window.showToast('❌ Could not save: ' + e.message);
+    });
+  }
+  if(!window._myRestaurantKey){
+    findOrCreateMyRestaurant(function(rst){ if(rst) doSave(); });
+  } else {
+    doSave();
+  }
+}
+
+function renderMyMenuList(rst){
+  var listEl = document.getElementById('pp-menu-list');
+  if(!listEl) return;
+  var menu = rst.menu ? Object.entries(rst.menu) : [];
+  if(!menu.length){
+    listEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--muted);font-size:0.78rem;">No items yet. Add your first one above — it appears in the app instantly.</div>';
+    return;
+  }
+  listEl.innerHTML = menu.map(function(m){
+    var item = m[1]; var mKey = m[0];
+    var price = parseInt(item.price)||0;
+    var thumbHtml = item.photoUrl
+      ? '<img src="'+item.photoUrl+'" alt="" style="width:34px;height:34px;border-radius:8px;object-fit:cover;flex-shrink:0;">'
+      : '<span style="font-size:1.3rem;flex-shrink:0;">'+(item.emoji||'🍽️')+'</span>';
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);">'
+      +'<div style="display:flex;align-items:center;gap:8px;min-width:0;">'+thumbHtml+'<span style="font-weight:600;font-size:0.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+item.name+'</span></div>'
+      +'<div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">'
+      +'<span style="font-size:0.8rem;color:var(--muted);">₦'+price.toLocaleString()+'</span>'
+      +'<button onclick="removeMyMenuItem(\''+mKey+'\')" style="background:none;border:none;color:#e74c3c;font-size:1.1rem;cursor:pointer;padding:4px;">🗑️</button>'
+      +'</div>'
+      +'</div>';
+  }).join('');
+}
+
+// Free image hosting for product photos — no Firebase Storage/billing needed.
+// Uploads happen straight from the partner's browser to imgbb; only the
+// resulting public URL gets saved to the item, same as before.
+var IMGBB_API_KEY = '9e573e3fce52ad27276075b929f8486e';
+function uploadToImgbb(file, cb){
+  var formData = new FormData();
+  formData.append('image', file);
+  fetch('https://api.imgbb.com/1/upload?key=' + IMGBB_API_KEY, {
+    method: 'POST',
+    body: formData
+  }).then(function(r){ return r.json(); })
+    .then(function(json){
+      if(json && json.success && json.data){
+        cb(json.data.display_url || json.data.url, null);
+      } else {
+        cb(null, (json && json.error && json.error.message) || 'Upload failed');
+      }
+    }).catch(function(e){
+      cb(null, e.message);
+    });
+}
+
+function addMyMenuItem(){
+  var nameEl = document.getElementById('pp-menu-name');
+  var priceEl = document.getElementById('pp-menu-price');
+  var emojiEl = document.getElementById('pp-menu-emoji');
+  var photoFileEl = document.getElementById('pp-menu-photo-file');
+  var photoStatusEl = document.getElementById('pp-menu-photo-status');
+  var name = nameEl.value.trim();
+  var price = parseInt(priceEl.value);
+  var emoji = emojiEl.value.trim() || '🍽️';
+  var photoFile = photoFileEl && photoFileEl.files && photoFileEl.files[0];
+  if(!name || !price || price <= 0){
+    if(window.showToast) window.showToast('⚠️ Enter a valid item name and price');
+    return;
+  }
+
+  function finishAdd(photoUrl){
+    var itemData = { name:name, price:price, emoji:emoji };
+    if(photoUrl) itemData.photoUrl = photoUrl;
+    window._db.ref('restaurants/'+window._myRestaurantKey+'/menu').push(itemData).then(function(){
+      nameEl.value=''; priceEl.value=''; emojiEl.value='';
+      if(photoFileEl) photoFileEl.value='';
+      if(photoStatusEl) photoStatusEl.textContent='';
+      if(window.showToast) window.showToast('✅ Item added');
+      loadMyMenu();
+    }).catch(function(e){
+      if(window.showToast) window.showToast('❌ Could not add item: '+e.message);
+    });
+  }
+
+  function doAdd(){
+    if(!photoFile){ finishAdd(null); return; }
+    if(photoStatusEl) photoStatusEl.textContent = '⏳ Uploading photo...';
+    uploadToImgbb(photoFile, function(url, err){
+      if(url){
+        if(photoStatusEl) photoStatusEl.textContent = '✅ Photo uploaded';
+        finishAdd(url);
+      } else {
+        // Photo upload is optional — a failure here never blocks the item
+        // from saving, it just saves with the emoji instead.
+        if(photoStatusEl) photoStatusEl.textContent = '⚠️ Photo upload failed — item saved with just the emoji. (' + (err||'') + ')';
+        finishAdd(null);
+      }
+    });
+  }
+
+  if(!window._myRestaurantKey){
+    findOrCreateMyRestaurant(function(rst){ if(rst) doAdd(); else if(window.showToast) window.showToast('❌ Could not set up your menu — try again'); });
+  } else {
+    doAdd();
+  }
+}
+
+function removeMyMenuItem(mKey){
+  if(!window._myRestaurantKey) return;
+  if(!confirm('Remove this menu item?')) return;
+  window._db.ref('restaurants/'+window._myRestaurantKey+'/menu/'+mKey).remove().then(function(){
+    if(window.showToast) window.showToast('🗑️ Item removed');
+    loadMyMenu();
+  }).catch(function(e){
+    if(window.showToast) window.showToast('❌ Could not remove item: '+e.message);
+  });
 }
 
 function loadHistory(){
@@ -773,6 +985,8 @@ function submitDeliveryBooking(){
     deliveryFee: fee, fare: fee,
     type: vehicle, payMethod: pay,
     orderNum: orderNum, rideStatus: 'pending',
+    deliveryStage: 'order_placed',
+    deliveryStageUpdatedAt: new Date().toISOString(),
     status: 'active', riderName: '', riderPhone: '',
     source: 'delivery_partner', partnerName: currentPartner.name,
     time: new Date().toISOString()
@@ -799,6 +1013,7 @@ function submitDeliveryBooking(){
     var custMsg =
       '📦 *RideNaija Delivery Confirmed!*\n'+
       '━━━━━━━━━━━━━━━━━\n'+
+      '🏷️ Tracking ID: '+key+'\n'+
       '🏪 Vendor: '+vendor+'\n'+
       '📦 Items: '+items+'\n'+
       '📍 Pickup: '+pickup+'\n'+
@@ -808,6 +1023,7 @@ function submitDeliveryBooking(){
       '🕐 Time: '+timeNow+'\n'+
       (orderNum?'📋 Order #: '+orderNum+'\n':'')+
       '━━━━━━━━━━━━━━━━━\n'+
+      'Track your delivery any time: https://'+window.location.host+'/track.html?id='+key+'\n'+
       'Your rider is being dispatched. For help: 08120715812\n'+
       'Thank you for choosing RideNaija! 🇳🇬';
 

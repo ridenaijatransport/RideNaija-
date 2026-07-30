@@ -131,9 +131,16 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   <div class="content">
     <!-- PROFILE -->
     <div class="profile-card" id="rider-profile-card">
-      <div class="pc-name" id="r-name">Loading...</div>
-      <div class="pc-meta" id="r-meta">—</div>
-      <div id="r-type-badge"></div>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+        <div id="r-avatar" onclick="document.getElementById('r-avatar-file').click()" style="width:56px;height:56px;border-radius:50%;background:rgba(0,0,0,0.15);display:flex;align-items:center;justify-content:center;font-size:1.6rem;flex-shrink:0;cursor:pointer;border:2px solid rgba(0,0,0,0.2);">👨🏿</div>
+        <input type="file" id="r-avatar-file" accept="image/*" style="display:none;" onchange="uploadRiderPhoto(this.files[0])">
+        <div style="flex:1;min-width:0;">
+          <div class="pc-name" id="r-name">Loading...</div>
+          <div class="pc-meta" id="r-meta">—</div>
+          <div id="r-type-badge"></div>
+        </div>
+      </div>
+      <div id="r-avatar-status" style="font-size:0.62rem;color:rgba(0,0,0,0.6);margin-bottom:8px;">Tap the circle to add your photo</div>
       <div class="pc-stats">
         <div class="pc-stat"><div class="pc-stat-num" id="r-trips">0</div><div class="pc-stat-lbl">Total Trips</div></div>
         <div class="pc-stat"><div class="pc-stat-num" id="r-rating">⭐</div><div class="pc-stat-lbl">Rating</div></div>
@@ -147,6 +154,15 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
       <div id="company-earnings-content">
         <div style="text-align:center;padding:20px;color:var(--muted);font-size:0.78rem;">Loading earnings…</div>
       </div>
+    </div>
+
+    <!-- MY DELIVERIES LOG (only for company/logistics riders assigned parcels) -->
+    <div id="delivery-log-section" style="display:none;">
+      <div class="sec-title">📦 My Deliveries Log</div>
+      <div id="delivery-log-summary" style="background:var(--card);border:1px solid rgba(79,158,255,0.25);border-radius:14px;padding:14px;margin-bottom:10px;">
+        <div style="text-align:center;padding:10px;color:var(--muted);font-size:0.78rem;">Loading your deliveries…</div>
+      </div>
+      <div id="delivery-log-list"></div>
     </div>
 
     <!-- SUBSCRIPTION STATUS (hidden for company riders) -->
@@ -227,13 +243,6 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-// ═══════════════════════════════════════════════════════════
-// Runs on EVERY page load, regardless of notification permission.
-// Purges any old/duplicate service worker registration at this origin
-// and force-refreshes /sw.js so this device is never stuck running a
-// stale copy (which is what causes blank/duplicate or silently-broken
-// push notifications even after clearing Chrome data).
-// ═══════════════════════════════════════════════════════════
 if ('serviceWorker' in navigator) {
   (async function(){
     try {
@@ -247,6 +256,7 @@ if ('serviceWorker' in navigator) {
     } catch (e) { console.error('[RideNaija] SW cleanup error:', e); }
   })();
 }
+
 
 // ═══════════════════════════════════════════════════════════
 // FCM PUSH NOTIFICATIONS — request permission, get token, save it
@@ -336,7 +346,6 @@ try{
     if(window.showToast) window.showToast('🔔 ' + title + (body?(' — '+body):''));
   });
 }catch(e){}
-
 // Helper: match names even if order is reversed e.g. "Ibrahim Mohammed" vs "Mohammed Ibrahim"
 window.namesMatch = function(a, b){
   a=(a||'').toLowerCase().trim(); b=(b||'').toLowerCase().trim();
@@ -350,6 +359,12 @@ db.ref('sub_history').on('value', snap=>{
   window.FB_SUB_HISTORY = snap.val() ? Object.entries(snap.val()).map(([k,v])=>({...v,fbKey:k})) : [];
   // Re-render settlement so subscription paid status updates immediately
   if(window._myBksCache) renderSettlement(window._myBksCache);
+});
+// Isolated logistics rider pay settings — only feeds the delivery bonus
+// estimate in the deliveries log, never touches the main pricing system.
+db.ref('logistics_settings').on('value', snap=>{
+  window.FB_LOGISTICS_SETTINGS = snap.val() || {};
+  if(window._myBksCache && currentRider && (currentRider.riderType==='company'||currentRider.companyRiderKey)) renderDeliveryLog(window._myBksCache);
 });
 db.ref('pricing').on('value', snap=>{
   if(snap.val()){
@@ -427,14 +442,6 @@ function showToast(msg){
 }
 
 function riderLogin(){
-  // Ask for notification permission IMMEDIATELY, synchronously, as the very
-  // first thing this click does — before the Firebase lookup below, which is
-  // a real network round-trip. Some browsers only honor requestPermission()
-  // reliably when it's called directly inside a click handler; calling it
-  // after an await/network callback can silently lose that "user gesture"
-  // context and the prompt never appears. This just locks in the decision
-  // early; the actual token fetch + save still happens further down once we
-  // know which rider this is.
   if('Notification' in window && Notification.permission === 'default'){
     Notification.requestPermission().catch(function(){});
   }
@@ -474,10 +481,36 @@ function openDashboard(){
   document.getElementById('r-trips').textContent  = (currentRider.trips||0).toLocaleString();
   document.getElementById('r-rating').textContent = currentRider.rating?'⭐'+currentRider.rating:'New';
   document.getElementById('r-area').textContent   = currentRider.city||'—';
+  var avEl = document.getElementById('r-avatar');
+  if(avEl) avEl.innerHTML = currentRider.photoUrl
+    ? '<img src="'+currentRider.photoUrl+'" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">'
+    : (currentRider.emoji||'👨🏿');
+  var avStatusEl = document.getElementById('r-avatar-status');
+  if(avStatusEl) avStatusEl.textContent = currentRider.photoUrl ? 'Tap your photo to change it' : 'Tap the circle to add your photo';
 
   // Ask for push notification permission and save the token against this rider's record
   // so the platform can notify them of new bookings even when the app is closed
   if(currentRider.fbKey) window.requestNotificationPermission('fcm_tokens/riders/'+currentRider.fbKey);
+
+  // ═══════════════════════════════════════════════════════════
+  // PRESENCE — mark this rider ONLINE while their portal is open, and let
+  // Firebase automatically flip them OFFLINE the instant the connection
+  // drops (closed tab, dead battery, lost signal, force-closed app) — no
+  // manual logout required for it to be accurate. Customers only see riders
+  // who are genuinely online right now (see index.html).
+  // ═══════════════════════════════════════════════════════════
+  if(currentRider.fbKey){
+    const presenceRef = db.ref('presence/riders/'+currentRider.fbKey);
+    db.ref('.info/connected').on('value', function(snap){
+      if(snap.val() === true){
+        presenceRef.onDisconnect().set({ online: false, lastSeen: firebase.database.ServerValue.TIMESTAMP })
+          .then(function(){
+            presenceRef.set({ online: true, lastSeen: firebase.database.ServerValue.TIMESTAMP });
+          });
+      }
+    });
+    window._presenceRef = presenceRef;
+  }
 
   // Show company badge if company rider — check both riderType and companyRiderKey
   const isCompany = currentRider.riderType==='company' || !!currentRider.companyRiderKey;
@@ -507,6 +540,11 @@ function openDashboard(){
   // Show company earnings section for company riders
   const compEarnings = document.getElementById('company-earnings-section');
   if(compEarnings) compEarnings.style.display = isCompany ? 'block' : 'none';
+
+  // Show delivery log section for company/logistics riders — this is the
+  // group that gets assigned parcel deliveries from the admin's Parcels tab.
+  const deliveryLogSection = document.getElementById('delivery-log-section');
+  if(deliveryLogSection) deliveryLogSection.style.display = isCompany ? 'block' : 'none';
 
   loadMyBookings();
   loadMyDedicated();
@@ -569,6 +607,7 @@ function loadMyBookings(){
       }).sort((a,b)=>new Date(b.time)-new Date(a.time));
     renderBookings(mine);
     window._myBksCache = mine; renderSettlement(mine);
+    if(currentRider && (currentRider.riderType==='company'||currentRider.companyRiderKey)) renderDeliveryLog(mine);
   }, err=>{
     console.warn('Booking load error:', err.code);
     // Show friendly retry panel — NOT a scary error
@@ -974,6 +1013,16 @@ function bookingCard(b,isActive){
   const riderOwed=isCash?fare:Math.floor(fare*getCommSplit().rider);
   const t=new Date(b.time);
   const timeStr=isNaN(t)?b.time:t.toLocaleDateString('en-NG',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+  const isDeliveryType = b.source==='delivery_partner'||b.source==='market_order'||b.source==='food_order'||b.source==='parcel_intake'||b.type==='market';
+  const dStage = b.deliveryStage||'order_placed';
+  const deliveryProgressHtml = (isActive && isDeliveryType) ? `
+    <div class="bc-actions" style="margin-top:6px;flex-direction:column;gap:6px;background:rgba(79,158,255,0.06);border:1px solid rgba(79,158,255,0.2);border-radius:9px;padding:10px;">
+      <div style="font-size:0.68rem;color:#4f9eff;font-weight:700;text-align:center;">📦 Delivery Progress: ${dStage==='in_transit'?'🚚 In Transit':dStage==='picked_up'?'📦 Picked Up':'🏷️ Order Placed'}</div>
+      <div style="display:flex;gap:6px;">
+        <button onclick="updateDeliveryStage('${b.fbKey||b.id}','picked_up')" style="flex:1;padding:8px;border-radius:7px;border:none;font-size:0.7rem;font-weight:700;cursor:pointer;background:${dStage==='picked_up'||dStage==='in_transit'?'var(--green)':'var(--card2)'};color:${dStage==='picked_up'||dStage==='in_transit'?'#000':'var(--muted)'};">📦 Picked Up</button>
+        <button onclick="updateDeliveryStage('${b.fbKey||b.id}','in_transit')" style="flex:1;padding:8px;border-radius:7px;border:none;font-size:0.7rem;font-weight:700;cursor:pointer;background:${dStage==='in_transit'?'var(--green)':'var(--card2)'};color:${dStage==='in_transit'?'#000':'var(--muted)'};">🚚 In Transit</button>
+      </div>
+    </div>` : '';
   return `<div class="booking-card">
     <div class="bc-top"><span class="bc-id">${b.fbKey||'BK'}</span><span class="bc-status ${isActive?'st-new':'st-done'}">${isActive?'Active':'Completed'}</span></div>
     <div class="bc-route">📍 ${b.pickup||'—'} → 🎯 ${b.destination||'—'}</div>
@@ -992,6 +1041,7 @@ function bookingCard(b,isActive){
       <span class="bc-chip">💳 ${b.payMethod||'—'}</span>
       <span class="bc-chip">🕐 ${timeStr}</span>
     </div>
+    ${deliveryProgressHtml}
     ${isActive?`<div class="bc-actions">
       <button class="bc-btn btn-call" onclick="window.location.href='tel:${b.phone}'">📞 Call</button>
       <button class="bc-btn btn-wa" onclick="window.open('https://wa.me/${(b.phone||'').replace(/^0/,'234')}?text=${encodeURIComponent('Hello! I am your RideNaija rider, on my way to '+b.pickup+'.')}','_blank')">💬 WhatsApp</button>
@@ -1009,12 +1059,23 @@ function bookingCard(b,isActive){
         <div style="color:var(--muted);font-size:0.72rem;text-align:center;padding:8px;">📡 Requesting GPS permission...<br/><span style="font-size:0.62rem;">Allow location access when prompted</span></div>
       </div>
       <div style="font-size:0.62rem;color:var(--muted);margin-bottom:8px;text-align:center;">🟢 You · 🔵 Customer — both shown live on map</div>
-      <button onclick="stopRiderTracking('${b.fbKey||b.id}','${b.phone||''}')"
+      <button onclick="stopRiderTracking('${b.fbKey||b.id}','${b.phone||''}',${isDeliveryType})"
         style="width:100%;padding:9px;background:var(--green);border:none;border-radius:9px;font-family:'Syne',sans-serif;font-weight:800;font-size:0.82rem;color:#000;cursor:pointer;">
-        ✅ Customer Arrived — Complete Ride
+        ${isDeliveryType ? '✅ Mark as Delivered' : '✅ Customer Arrived — Complete Ride'}
       </button>
     </div>`:`<div class="bc-actions"><button class="bc-btn btn-done" disabled>✅ Completed</button></div>`}
   </div>`;
+}
+
+// Advances a delivery-type booking through its tracking stages (order_placed
+// → picked_up → in_transit). This is a NEW, separate field from rideStatus —
+// it doesn't touch settlement/payment logic at all, purely for the customer
+// tracking page (track.html) to show progress.
+function updateDeliveryStage(bookingId, stage){
+  if(!bookingId) return;
+  db.ref('bookings/'+bookingId).update({ deliveryStage: stage, deliveryStageUpdatedAt: new Date().toISOString() })
+    .then(function(){ if(window.showToast) window.showToast(stage==='picked_up' ? '📦 Marked as Picked Up' : '🚚 Marked as In Transit'); })
+    .catch(function(){});
 }
 
 function loadPricing(){
@@ -1027,7 +1088,45 @@ function loadPricing(){
   });
 }
 
+// Free photo hosting for rider profile photos — shown to customers before/
+// during a ride, same as any standard ride-hailing app. No Firebase Storage/
+// billing needed; only the resulting public URL gets saved to the rider record.
+var IMGBB_API_KEY = '9e573e3fce52ad27276075b929f8486e';
+function uploadRiderPhoto(file){
+  if(!file || !currentRider || !currentRider.fbKey) return;
+  var statusEl = document.getElementById('r-avatar-status');
+  if(statusEl) statusEl.textContent = '⏳ Uploading photo...';
+  var formData = new FormData();
+  formData.append('image', file);
+  fetch('https://api.imgbb.com/1/upload?key=' + IMGBB_API_KEY, {
+    method: 'POST',
+    body: formData
+  }).then(function(r){ return r.json(); })
+    .then(function(json){
+      if(json && json.success && json.data){
+        var url = json.data.display_url || json.data.url;
+        return db.ref('riders/'+currentRider.fbKey).update({ photoUrl: url }).then(function(){
+          currentRider.photoUrl = url;
+          var avEl = document.getElementById('r-avatar');
+          if(avEl) avEl.innerHTML = '<img src="'+url+'" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">';
+          if(statusEl) statusEl.textContent = '✅ Photo updated — tap to change again';
+          if(window.showToast) showToast('✅ Profile photo updated!');
+        });
+      } else {
+        throw new Error((json && json.error && json.error.message) || 'Upload failed');
+      }
+    }).catch(function(e){
+      if(statusEl) statusEl.textContent = '⚠️ Upload failed — try again';
+      if(window.showToast) showToast('❌ Could not upload photo: '+e.message);
+    });
+}
+
 function riderLogout(){
+  // Mark offline immediately rather than waiting for onDisconnect to fire —
+  // a clean logout shouldn't have to wait for a connection-drop detection.
+  if(window._presenceRef){
+    window._presenceRef.set({ online: false, lastSeen: firebase.database.ServerValue.TIMESTAMP }).catch(()=>{});
+  }
   localStorage.removeItem('rn_rider_session');
   showToast('👋 Logged out!');
   // Reload to fully detach all Firebase listeners registered during this session
@@ -1054,6 +1153,54 @@ window.addEventListener('load',()=>{
 });
 
 // ── Company Rider Earnings ────────────────────────────────────
+// ═══════════════════════════════════════════════════════════
+// MY DELIVERIES LOG — for company/logistics riders on a monthly salary plus
+// a per-delivery bonus. This is a READ-ONLY log for the rider's own
+// reference: it counts delivered parcels and shows a plain multiplication
+// (count × bonus rate) as an ESTIMATE only. It does not mark anything as
+// paid, does not touch riderPaid/settlement logic anywhere, and the rate
+// itself lives in its own isolated logistics_settings path — completely
+// separate from the main pricing system, so it can never collide with it.
+// ═══════════════════════════════════════════════════════════
+function renderDeliveryLog(bookings){
+  const summaryEl = document.getElementById('delivery-log-summary');
+  const listEl = document.getElementById('delivery-log-list');
+  if(!summaryEl || !listEl) return;
+
+  const delivered = bookings.filter(function(b){
+    return b.source==='parcel_intake' && (b.rideStatus==='completed'||b.rideStatus==='delivered');
+  }).sort(function(a,b){ return new Date(b.time||0) - new Date(a.time||0); });
+
+  const bonusRate = (window.FB_LOGISTICS_SETTINGS && window.FB_LOGISTICS_SETTINGS.parcelBonusPerDelivery) || 200;
+
+  const now = new Date();
+  const weekStart = new Date(now); weekStart.setDate(now.getDate() - now.getDay()); weekStart.setHours(0,0,0,0);
+  const thisWeek = delivered.filter(function(b){ return new Date(b.time||0) >= weekStart; });
+  const weekEstimate = thisWeek.length * bonusRate;
+
+  summaryEl.innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:center;">'
+    + '<div><div style="font-size:0.62rem;color:var(--muted);">This week</div><div style="font-family:\'Syne\',sans-serif;font-size:1.3rem;font-weight:800;color:#4f9eff;">' + thisWeek.length + ' delivered</div></div>'
+    + '<div style="text-align:right;"><div style="font-size:0.62rem;color:var(--muted);">Estimated bonus</div><div style="font-family:\'Syne\',sans-serif;font-size:1.3rem;font-weight:800;color:var(--green);">₦' + weekEstimate.toLocaleString() + '</div></div>'
+    + '</div>'
+    + '<div style="font-size:0.62rem;color:var(--muted);margin-top:8px;text-align:center;">₦' + bonusRate.toLocaleString() + ' per delivery · estimate for your reference — confirm actual payout with your owner</div>';
+
+  if(!delivered.length){
+    listEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--muted);font-size:0.76rem;">No completed deliveries logged yet.</div>';
+    return;
+  }
+
+  listEl.innerHTML = delivered.slice(0,50).map(function(b){
+    const t = new Date(b.time);
+    const dateStr = isNaN(t) ? (b.time||'—') : t.toLocaleDateString('en-NG',{weekday:'short',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+    return '<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">'
+      + '<div style="min-width:0;"><div style="font-size:0.78rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (b.destination||'—') + '</div>'
+      + '<div style="font-size:0.65rem;color:var(--muted);">' + dateStr + ' · ' + (b.fbKey||'') + '</div></div>'
+      + '<div style="font-size:0.76rem;font-weight:700;color:var(--green);white-space:nowrap;margin-left:8px;">+₦' + bonusRate.toLocaleString() + '</div>'
+      + '</div>';
+  }).join('');
+}
+
 function loadCompanyEarnings(){
   if(!currentRider) return;
   const box = document.getElementById('company-earnings-content');
@@ -1485,8 +1632,8 @@ function startRiderTracking(bookingId, customerPhone){
   );
 }
 
-function stopRiderTracking(bookingId, customerPhone){
-  if(!confirm('Confirm customer has arrived and ride is complete?')) return;
+function stopRiderTracking(bookingId, customerPhone, isDelivery){
+  if(!confirm(isDelivery ? 'Confirm this parcel/order has been delivered?' : 'Confirm customer has arrived and ride is complete?')) return;
 
   // Stop GPS watcher
   if(_riderWatcher !== null){

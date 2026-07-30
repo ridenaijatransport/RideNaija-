@@ -42,13 +42,10 @@
   try {
     firebase.initializeApp(firebaseConfig);
 
-    // ═══════════════════════════════════════════════════════════
     // Runs on EVERY page load, regardless of notification permission.
     // Purges any old/duplicate service worker registration at this origin
     // and force-refreshes /sw.js so this device is never stuck running a
-    // stale copy (which is what causes blank/duplicate or silently-broken
-    // push notifications even after clearing Chrome data).
-    // ═══════════════════════════════════════════════════════════
+    // stale copy.
     if ('serviceWorker' in navigator) {
       (async function(){
         try {
@@ -170,17 +167,32 @@
       });
     }catch(e){}
 
-    // Load verified riders from Firebase in real time
-    _db.ref('riders').on('value', function(snapshot){
-      const data = snapshot.val();
-      if(data){
-        window.LIVE_RIDERS = Object.entries(data)
-          .filter(function(e){ return e[1].status === 'verified'; })
-          .map(function(e){ return Object.assign({}, e[1], {id: e[0], fbKey: e[0]}); });
-      } else {
-        window.LIVE_RIDERS = [];
-      }
+    // Load verified riders from Firebase in real time — combined with live
+    // presence, so customers only ever see riders who are actually logged
+    // into their portal right now, not just "verified" in general. A rider
+    // who closes their app, loses signal, or logs out disappears from this
+    // list automatically (see presence/riders, written by rider-portal.html).
+    let _ridersRaw = null;
+    let _riderPresenceMap = {};
+
+    function _recomputeLiveRiders(){
+      if(!_ridersRaw){ window.LIVE_RIDERS = []; if(window.renderRiders) window.renderRiders(); return; }
+      window.LIVE_RIDERS = Object.entries(_ridersRaw)
+        .filter(function(e){
+          return e[1].status === 'verified' && _riderPresenceMap[e[0]] && _riderPresenceMap[e[0]].online === true;
+        })
+        .map(function(e){ return Object.assign({}, e[1], {id: e[0], fbKey: e[0]}); });
       if(window.renderRiders) window.renderRiders();
+    }
+
+    _db.ref('riders').on('value', function(snapshot){
+      _ridersRaw = snapshot.val();
+      _recomputeLiveRiders();
+    });
+
+    _db.ref('presence/riders').on('value', function(snapshot){
+      _riderPresenceMap = snapshot.val() || {};
+      _recomputeLiveRiders();
     });
 
     // Load pricing from Firebase
@@ -1095,7 +1107,12 @@ input:checked+.slider::before{transform:translateX(18px);}
       <div class="form-group"><label>Full Name</label><input type="text" id="ep-name"/></div>
       <div class="form-group"><label>Phone</label><input type="tel" id="ep-phone"/></div>
       <div class="form-group"><label>Email</label><input type="email" id="ep-email"/></div>
-      <div class="form-group"><label>Avatar</label><select id="ep-av"><option value="👤">👤 Default</option><option value="👨🏿">👨🏿 Man</option><option value="👩🏿">👩🏿 Woman</option><option value="👨🏿‍💼">👨🏿‍💼 Professional (M)</option><option value="👩🏿‍💼">👩🏿‍💼 Professional (F)</option></select></div>
+      <div class="form-group">
+        <label>📷 Profile Photo (optional)</label>
+        <input type="file" id="ep-photo-file" accept="image/*" style="width:100%;font-size:0.78rem;color:var(--muted,#7d9389);">
+        <div id="ep-photo-status" style="font-size:0.68rem;color:var(--muted,#7d9389);margin-top:4px;"></div>
+      </div>
+      <div class="form-group"><label>Avatar (used if no photo is set)</label><select id="ep-av"><option value="👤">👤 Default</option><option value="👨🏿">👨🏿 Man</option><option value="👩🏿">👩🏿 Woman</option><option value="👨🏿‍💼">👨🏿‍💼 Professional (M)</option><option value="👩🏿‍💼">👩🏿‍💼 Professional (F)</option></select></div>
       <button class="green-btn" onclick="saveProfile()">💾 Save Profile</button>
     </div>
   </div>
@@ -1214,22 +1231,32 @@ input:checked+.slider::before{transform:translateX(18px);}
   </div>
 </div>
 
-<!-- ══════ FOOD ══════ -->
+<!-- ══════ FOOD & SHOP ══════ -->
 <div class="page" id="page-food">
   <div class="pg-header">
-    <h2>🍽️ Order Food</h2>
-    <p>Browse restaurants & get it delivered to your door</p>
+    <h2>🍽️ Food & 🛍️ Shop</h2>
+    <p>Browse local restaurants and shops & get it delivered to your door</p>
+  </div>
+
+  <!-- CATEGORY FILTER — same vendors/cart/checkout underneath, just a browsing filter -->
+  <div id="food-cat-pills" style="display:flex;gap:8px;padding:0 16px 12px;overflow-x:auto;">
+    <button class="cat-pill active" data-cat="all" onclick="setFoodCategoryFilter('all',this)" style="flex-shrink:0;padding:7px 14px;border-radius:20px;border:1px solid var(--border);background:var(--green);color:#000;font-weight:700;font-size:0.76rem;white-space:nowrap;">All</button>
+    <button class="cat-pill" data-cat="Food" onclick="setFoodCategoryFilter('Food',this)" style="flex-shrink:0;padding:7px 14px;border-radius:20px;border:1px solid var(--border);background:var(--card);color:var(--text);font-weight:700;font-size:0.76rem;white-space:nowrap;">🍽️ Food</button>
+    <button class="cat-pill" data-cat="Groceries" onclick="setFoodCategoryFilter('Groceries',this)" style="flex-shrink:0;padding:7px 14px;border-radius:20px;border:1px solid var(--border);background:var(--card);color:var(--text);font-weight:700;font-size:0.76rem;white-space:nowrap;">🛒 Groceries</button>
+    <button class="cat-pill" data-cat="Fashion" onclick="setFoodCategoryFilter('Fashion',this)" style="flex-shrink:0;padding:7px 14px;border-radius:20px;border:1px solid var(--border);background:var(--card);color:var(--text);font-weight:700;font-size:0.76rem;white-space:nowrap;">👗 Fashion</button>
+    <button class="cat-pill" data-cat="Electronics" onclick="setFoodCategoryFilter('Electronics',this)" style="flex-shrink:0;padding:7px 14px;border-radius:20px;border:1px solid var(--border);background:var(--card);color:var(--text);font-weight:700;font-size:0.76rem;white-space:nowrap;">📱 Electronics</button>
+    <button class="cat-pill" data-cat="Other" onclick="setFoodCategoryFilter('Other',this)" style="flex-shrink:0;padding:7px 14px;border-radius:20px;border:1px solid var(--border);background:var(--card);color:var(--text);font-weight:700;font-size:0.76rem;white-space:nowrap;">✨ Other</button>
   </div>
 
   <!-- EMPTY STATE (shown until restaurants load) -->
   <div id="food-empty" style="display:none;">
     <div class="empty-box">
       <div class="ico">🍽️</div>
-      <p>No restaurants available yet.<br/>Check back soon — we're adding local restaurants near you!</p>
+      <p>Nothing here yet.<br/>Check back soon — we're adding local vendors near you!</p>
     </div>
   </div>
 
-  <!-- RESTAURANT LIST -->
+  <!-- VENDOR LIST -->
   <div id="food-rst-list"></div>
 </div>
 
@@ -1437,7 +1464,7 @@ input:checked+.slider::before{transform:translateX(18px);}
 </div>
 <nav class="bnav">
   <button class="ni active" id="nav-home" onclick="goPage('home')"><span class="ic">🏠</span>Home</button>
-  <button class="ni" id="nav-food" onclick="goPage('food')"><span class="ic">🍽️</span>Food</button>
+  <button class="ni" id="nav-food" onclick="goPage('food')"><span class="ic">🍽️</span>Shop</button>
   <button class="ni" id="nav-history" onclick="goPage('history')"><span class="ic">🕐</span>History</button>
   <button class="ni" id="nav-wallet" onclick="goPage('wallet')"><span class="ic">💰</span>Wallet</button>
   <button class="ni" id="nav-profile" onclick="goPage('profile')"><span class="ic">👤</span>Profile</button>
@@ -1768,9 +1795,6 @@ function fmt(n){return'₦'+parseFloat(n).toLocaleString('en-NG',{minimumFractio
 // Owner dashboard accessed directly via admin.html file
 
 function quickRiderLogin(){
-  // Prime the permission prompt synchronously on click, before the async
-  // Firebase lookup further down — some browsers only reliably show the
-  // prompt when requestPermission() is called directly from a user gesture.
   if('Notification' in window && Notification.permission === 'default'){
     Notification.requestPermission().catch(()=>{});
   }
@@ -3075,7 +3099,7 @@ function filterRidersByArea(){
     const bl=_rtl==='okada'?'🏍️ Okada':_rtl==='keke'?'🛺 Keke':(_rtl==='taxi'||_rtl==='taxi_suv'||_rtl==='taxi_mini')?'🚖 Taxi':_rtl==='royal'?'🚚 Cargo':(_rtl.includes('royal')||_rtl.includes('intercity'))?'👑 Royal':'🚛 Goods';
     const routeBadge=r._routeMatch?`<span style="font-size:0.55rem;font-weight:700;padding:2px 5px;border-radius:5px;background:rgba(0,184,101,0.15);color:var(--green);margin-left:3px;">✅ Route match</span>`:'';
     const routePreview=r.routes?`<div style="font-size:0.64rem;color:var(--muted);margin-top:2px;">🗺️ ${r.routes.substring(0,38)}${r.routes.length>38?'...':''}</div>`:'';
-    d.innerHTML=`<div class="rc-av">${r.emoji||'👨🏿'}<div class="rc-dot"></div></div><div class="rc-inf"><div class="rc-nm">${r.name||'Rider'}</div><div class="rc-mt"><span>⭐${r.rating||'New'}</span><span>🛣️${(r.trips||0).toLocaleString()}</span><span>📍${r.area||r.city||'—'}</span></div><div style="display:flex;align-items:center;gap:3px;margin-top:2px;"><span class="rc-badge ${bc}">${bl}</span>${routeBadge}</div>${routePreview}</div><div class="rc-r"><div class="rc-eta">${r.eta||'~5 min'}</div><div style="font-size:0.6rem;color:var(--green);font-weight:700;margin-top:2px;">View →</div></div>`;
+    d.innerHTML=`<div class="rc-av">${r.photoUrl?'<img src="'+r.photoUrl+'" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">':(r.emoji||'👨🏿')}<div class="rc-dot"></div></div><div class="rc-inf"><div class="rc-nm">${r.name||'Rider'}</div><div class="rc-mt"><span>⭐${r.rating||'New'}</span><span>🛣️${(r.trips||0).toLocaleString()}</span><span>📍${r.area||r.city||'—'}</span></div><div style="display:flex;align-items:center;gap:3px;margin-top:2px;"><span class="rc-badge ${bc}">${bl}</span>${routeBadge}</div>${routePreview}</div><div class="rc-r"><div class="rc-eta">${r.eta||'~5 min'}</div><div style="font-size:0.6rem;color:var(--green);font-weight:700;margin-top:2px;">View →</div></div>`;
     d.onclick=()=>openRiderProfile(r);
     list.appendChild(d);
   });
@@ -3083,7 +3107,7 @@ function filterRidersByArea(){
 
 function openRiderProfile(rider){
   selectedRiderData=rider;
-  document.getElementById('rp-avatar').textContent=rider.emoji||'👨🏿';
+  document.getElementById('rp-avatar').innerHTML=rider.photoUrl?'<img src="'+rider.photoUrl+'" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">':(rider.emoji||'👨🏿');
   document.getElementById('rp-name').textContent=rider.name||'Rider';
   document.getElementById('rp-rating').textContent=rider.rating?'⭐'+rider.rating:'New';
   document.getElementById('rp-trips').textContent=(rider.trips||0).toLocaleString();
@@ -3729,8 +3753,6 @@ function doPaystackWithRider(email,phone,pickup,dest,rider){
 }
 
 function completeBooking(pickup,dest,phone,pay,fare,ref,chosenRider){
-  // Prime the permission prompt as early as possible in this click-triggered
-  // flow — cheap and harmless if permission is already decided either way.
   if('Notification' in window && Notification.permission === 'default'){
     Notification.requestPermission().catch(()=>{});
   }
@@ -4164,9 +4186,34 @@ function shareWallet(){if(navigator.share){navigator.share({title:'RideNaija Wal
 // ══════════════════════════════════════════
 // PROFILE
 // ══════════════════════════════════════════
+// Free photo hosting for profile pictures — no Firebase Storage/billing
+// needed. Upload happens straight from the browser; only the resulting
+// public URL gets saved.
+var IMGBB_API_KEY = '9e573e3fce52ad27276075b929f8486e';
+function uploadToImgbb(file, cb){
+  var formData = new FormData();
+  formData.append('image', file);
+  fetch('https://api.imgbb.com/1/upload?key=' + IMGBB_API_KEY, {
+    method: 'POST',
+    body: formData
+  }).then(function(r){ return r.json(); })
+    .then(function(json){
+      if(json && json.success && json.data){
+        cb(json.data.display_url || json.data.url, null);
+      } else {
+        cb(null, (json && json.error && json.error.message) || 'Upload failed');
+      }
+    }).catch(function(e){
+      cb(null, e.message);
+    });
+}
+
 function renderProfile(){
   const p=getProfile();
-  document.getElementById('prof-av').textContent=p.avatar||'👤';
+  const avEl = document.getElementById('prof-av');
+  avEl.innerHTML = p.photoUrl
+    ? '<img src="'+p.photoUrl+'" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">'
+    : (p.avatar||'👤');
   document.getElementById('prof-nm').textContent=p.name||'Your Name';
   document.getElementById('prof-ph').textContent=p.phone?'+234 '+p.phone:'Set your phone number';
   const bks=getBookings();
@@ -4175,11 +4222,44 @@ function renderProfile(){
   document.getElementById('prof-w-sub').textContent='Balance: '+fmt(getWallet());
 }
 
-function loadEditForm(){const p=getProfile();document.getElementById('ep-name').value=p.name||'';document.getElementById('ep-phone').value=p.phone||'';document.getElementById('ep-email').value=p.email||'';document.getElementById('ep-av').value=p.avatar||'👤';}
+function loadEditForm(){
+  const p=getProfile();
+  document.getElementById('ep-name').value=p.name||'';
+  document.getElementById('ep-phone').value=p.phone||'';
+  document.getElementById('ep-email').value=p.email||'';
+  document.getElementById('ep-av').value=p.avatar||'👤';
+  const statusEl = document.getElementById('ep-photo-status');
+  if(statusEl) statusEl.textContent = p.photoUrl ? '✅ Photo already set — choose a new one to replace it' : '';
+}
 
 function saveProfile(){
-  const p={name:document.getElementById('ep-name').value.trim()||'Your Name',phone:document.getElementById('ep-phone').value.trim(),email:document.getElementById('ep-email').value.trim(),avatar:document.getElementById('ep-av').value};
-  localStorage.setItem('rn_profile',JSON.stringify(p));closeSubpage();showToast('✅ Profile saved!');
+  const prev = getProfile();
+  const base={name:document.getElementById('ep-name').value.trim()||'Your Name',phone:document.getElementById('ep-phone').value.trim(),email:document.getElementById('ep-email').value.trim(),avatar:document.getElementById('ep-av').value};
+  const photoFileEl = document.getElementById('ep-photo-file');
+  const photoFile = photoFileEl && photoFileEl.files && photoFileEl.files[0];
+  const statusEl = document.getElementById('ep-photo-status');
+
+  function finishSave(photoUrl){
+    const p = Object.assign({}, base, { photoUrl: photoUrl !== undefined ? photoUrl : prev.photoUrl });
+    localStorage.setItem('rn_profile',JSON.stringify(p));
+    closeSubpage();
+    showToast('✅ Profile saved!');
+  }
+
+  if(photoFile){
+    if(statusEl) statusEl.textContent = '⏳ Uploading photo...';
+    uploadToImgbb(photoFile, function(url, err){
+      if(url){
+        finishSave(url);
+      } else {
+        // Upload failing never blocks saving the rest of the profile
+        showToast('⚠️ Photo upload failed, rest of profile saved');
+        finishSave(undefined);
+      }
+    });
+  } else {
+    finishSave(undefined);
+  }
 }
 
 function renderAddresses(){
@@ -4263,7 +4343,7 @@ function openTrack(op, bookingId){
   // Restore from localStorage if bookingId lost (page refresh)
   currentBookingId = bookingId || window._lastFirebaseBkKey || localStorage.getItem('rn_active_bk_id') || '';
   window._lastBookedRiderKey = window._lastBookedRiderKey || localStorage.getItem('rn_active_rider_key') || '';
-  document.getElementById('tr-av').textContent=op.emoji||'👨🏿';
+  document.getElementById('tr-av').innerHTML=op.photoUrl?'<img src="'+op.photoUrl+'" alt="" style="width:36px;height:36px;border-radius:50%;object-fit:cover;vertical-align:middle;">':(op.emoji||'👨🏿');
   document.getElementById('tr-nm').textContent=op.name||'Operator';
   document.getElementById('tr-pl').textContent=(op.plate||'Pending')+' · ⭐'+(op.rating||'New');
   document.getElementById('tr-eta').textContent='Arriving in ~'+(op.eta||'5 min');
@@ -4613,6 +4693,8 @@ function submitMarketOrder(){
     payMethod: mktPayMethod,
     status: 'active',
     rideStatus: 'pending_shopping',
+    deliveryStage: 'order_placed',
+    deliveryStageUpdatedAt: timeNow,
     riderName: '', riderPhone: '',
     time: timeNow
   };
@@ -4665,7 +4747,7 @@ function submitMarketOrder(){
   sendOwnerWhatsApp(ownerMsg);
 
   // Success feedback + payment instruction for card
-  showToast('✅ Market order placed! We will WhatsApp you shortly.');
+  showToast('✅ Order placed! Tracking ID: ' + orderId);
   if(mktPayMethod === 'Card'){
     const transferMsg =
       '💳 *RideNaija Market Order Payment*\n\n' +
@@ -4710,9 +4792,28 @@ function showToast(msg){const t=document.getElementById('toast');t.textContent=m
 // ══════════════════════════════════════════
 var foodCart = {}; // { rstFbKey: { rstName, rstPhone, rstLocation, deliveryFee, items:[{name,price,emoji,qty}] } }
 var foodPayMethod = 'cash';
+var _foodCategoryFilter = 'all';
+
+function setFoodCategoryFilter(cat, btnEl){
+  _foodCategoryFilter = cat;
+  var pills = document.querySelectorAll('#food-cat-pills .cat-pill');
+  pills.forEach(function(p){
+    var isActive = p === btnEl;
+    p.classList.toggle('active', isActive);
+    p.style.background = isActive ? 'var(--green)' : 'var(--card)';
+    p.style.color = isActive ? '#000' : 'var(--text)';
+  });
+  renderFoodTab();
+}
 
 function renderFoodTab(){
-  var rsts = window.LIVE_RESTAURANTS || [];
+  var allRsts = window.LIVE_RESTAURANTS || [];
+  var rsts = _foodCategoryFilter === 'all' ? allRsts : allRsts.filter(function(r){
+    // Vendors created before categories existed default to "Food" so nothing
+    // that already worked changes behavior.
+    var cat = r.category || 'Food';
+    return cat === _foodCategoryFilter;
+  });
   var listEl = document.getElementById('food-rst-list');
   var emptyEl = document.getElementById('food-empty');
   if(!listEl) return;
@@ -4731,8 +4832,11 @@ function renderFoodTab(){
       var cartRst = foodCart[r.fbKey];
       var existing = cartRst ? cartRst.items.find(function(i){ return i.mKey===mKey; }) : null;
       var qty = existing ? existing.qty : 0;
+      var thumbHtml = item.photoUrl
+        ? '<img src="'+item.photoUrl+'" alt="" style="width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0;">'
+        : '<span class="fmi-emoji">'+(item.emoji||'🍽️')+'</span>';
       return '<div class="food-menu-item">'
-        +'<div class="fmi-left"><span class="fmi-emoji">'+(item.emoji||'🍽️')+'</span><span class="fmi-name">'+item.name+'</span></div>'
+        +'<div class="fmi-left">'+thumbHtml+'<span class="fmi-name">'+item.name+'</span></div>'
         +'<span class="fmi-price">₦'+parseInt(item.price).toLocaleString()+'</span>'
         +'<div class="fmi-qty">'
         +'<button class="'+(qty>0?'active':'')+'" onclick="foodQty(\''+r.fbKey+'\',\''+mKey+'\',\''+item.name+'\','+item.price+',\''+(item.emoji||'🍽️')+'\',\''+(r.name||'')+'\',\''+(r.phone||'')+'\',\''+(r.location||'')+'\','+(r.deliveryFee||500)+',-1)">−</button>'
@@ -4740,7 +4844,7 @@ function renderFoodTab(){
         +'<button class="'+(qty>0?'active':'')+'" onclick="foodQty(\''+r.fbKey+'\',\''+mKey+'\',\''+item.name+'\','+item.price+',\''+(item.emoji||'🍽️')+'\',\''+(r.name||'')+'\',\''+(r.phone||'')+'\',\''+(r.location||'')+'\','+(r.deliveryFee||500)+',1)">+</button>'
         +'</div>'
         +'</div>';
-    }).join('') : '<div style="font-size:0.76rem;color:var(--muted);padding:8px 0;">Menu coming soon</div>';
+    }).join('') : '<div style="font-size:0.76rem;color:var(--muted);padding:8px 0;">Nothing listed yet</div>';
 
     return '<div class="food-rst-card">'
       +'<div class="food-rst-head">'
@@ -4852,6 +4956,10 @@ function placeFoodOrder(){
   // Look up restaurant state from the restaurants registry
   var _rstRecord = (window.FB_RESTAURANTS||[]).find(function(r){ return r.fbKey===rstKey || r.name===cart.rstName; });
   var _rstState = (_rstRecord && _rstRecord.state) || '';
+  var _vendorCategory = (_rstRecord && _rstRecord.category) || 'Food';
+  var _isFoodCat = _vendorCategory === 'Food';
+  var _orderLabel = _isFoodCat ? 'Food Order' : (_vendorCategory + ' Order');
+  var _orderEmoji = _isFoodCat ? '🍽️' : '🛍️';
   var bkData = {
     source: 'food_order',
     restaurantKey: rstKey,
@@ -4870,6 +4978,8 @@ function placeFoodOrder(){
     notes: notes,
     status: 'active',
     rideStatus: 'pending',
+    deliveryStage: 'order_placed',
+    deliveryStageUpdatedAt: new Date().toISOString(),
     type: 'okada',
     riderName: '', riderPhone: '',
     time: new Date().toISOString()
@@ -4894,7 +5004,7 @@ function placeFoodOrder(){
             headers:{'Content-Type':'application/json'},
             body: JSON.stringify({
               token: tokenData.token,
-              title: '🍽️ New Food Order!',
+              title: _orderEmoji+' New '+_orderLabel+'!',
               body: itemsSummary+' · ₦'+grand.toLocaleString(),
               data: { link:'/partner-portal.html', bookingId:bkKey }
             })
@@ -4908,7 +5018,7 @@ function placeFoodOrder(){
         headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
           adminBroadcast: true,
-          title: '🍽️ New Food Order — Needs Rider',
+          title: _orderEmoji+' New '+_orderLabel+' — Needs Rider',
           body: cart.rstName+' → '+addr+' · ₦'+grand.toLocaleString(),
           data: { link:'/admin.html', bookingId:bkKey }
         })
@@ -4916,9 +5026,10 @@ function placeFoodOrder(){
 
       // WhatsApp receipt to customer
       var timeStr = new Date().toLocaleTimeString('en-NG',{hour:'2-digit',minute:'2-digit'});
-      var msg = '🍽️ *RideNaija Food Order Confirmed!*\n'
+      var msg = _orderEmoji+' *RideNaija '+_orderLabel+' Confirmed!*\n'
         +'━━━━━━━━━━━━━━━━━\n'
-        +'🏪 Restaurant: *'+cart.rstName+'*\n'
+        +'🏷️ Tracking ID: '+bkKey+'\n'
+        +'🏪 '+(_isFoodCat?'Restaurant':'Vendor')+': *'+cart.rstName+'*\n'
         +'📦 Items:\n'+cart.items.map(function(i){ return '  '+i.emoji+' '+i.name+' × '+i.qty+' = ₦'+(i.price*i.qty).toLocaleString(); }).join('\n')+'\n'
         +'━━━━━━━━━━━━━━━━━\n'
         +'🛍️ Subtotal: ₦'+subtotal.toLocaleString()+'\n'
@@ -4929,6 +5040,7 @@ function placeFoodOrder(){
         +'🕐 Ordered: '+timeStr+'\n'
         +(notes?'📝 Notes: '+notes+'\n':'')
         +'━━━━━━━━━━━━━━━━━\n'
+        +'Track your order: https://'+window.location.host+'/track.html?id='+bkKey+'\n'
         +'A rider is being dispatched. For help call: 08120715812\nThank you! 🇳🇬';
 
       var waUrl = 'https://wa.me/'+phone.replace(/^0/,'234')+'?text='+encodeURIComponent(msg);
