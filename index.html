@@ -58,6 +58,17 @@
           reg.update().catch(()=>{});
         } catch (e) { console.error('[RideNaija] SW cleanup error:', e); }
       })();
+      // A new service worker only takes control on the NEXT navigation after
+      // it installs — the page that triggered the update is still served by
+      // the old one. Without this, every update needs a manual second reload
+      // to actually show up, which nobody knows to do. This makes it
+      // automatic and one-time (guarded so it can't ever loop).
+      let _rnSwRefreshed = false;
+      navigator.serviceWorker.addEventListener('controllerchange', function(){
+        if (_rnSwRefreshed) return;
+        _rnSwRefreshed = true;
+        window.location.reload();
+      });
     }
     const _db = firebase.database();
 
@@ -1848,71 +1859,82 @@ function quickRiderLogin(){
     // Set currentRider globally so renderRiderBks and riderBookingCard can access it
     window.currentRider = {...rider, fbKey: key};
 
-    // Show the Logout button now that a rider is actually logged in
+    // ═══════════════════════════════════════════════════════════
+    // These four lines are the absolute minimum for a working dashboard:
+    // hide login, show content, show logout button. They run FIRST and
+    // alone, with nothing above them that could throw and block them —
+    // if anything below this point fails, the dashboard still opens and
+    // the Logout button still appears.
+    // ═══════════════════════════════════════════════════════════
+    document.getElementById('rp-login-box').style.display='none';
+    document.getElementById('rp-content').style.display='block';
     const logoutBtn = document.getElementById('rp-logout-btn');
     if(logoutBtn) logoutBtn.style.display = 'inline-block';
-
-    // ═══════════════════════════════════════════════════════════
-    // PRESENCE — mark this rider ONLINE while this dashboard is open, exactly
-    // like rider-portal.html does, so customers only ever see riders who are
-    // genuinely active right now. This is the path most riders actually use
-    // (via their profile in the app), so it needs the same tracking as the
-    // standalone rider-portal.html.
-    // ═══════════════════════════════════════════════════════════
-    if(key){
-      const presenceRef = window.firebaseDB.ref('presence/riders/'+key);
-      window.firebaseDB.ref('.info/connected').on('value', function(snap){
-        if(snap.val() === true){
-          presenceRef.onDisconnect().set({ online: false, lastSeen: firebase.database.ServerValue.TIMESTAMP })
-            .then(function(){
-              presenceRef.set({ online: true, lastSeen: firebase.database.ServerValue.TIMESTAMP });
-            });
-        }
-      });
-      window._embeddedPresenceRef = presenceRef;
-    }
-
-    // Ask for push notification permission and save the token against this rider's record
-    if(key) window.requestNotificationPermission('fcm_tokens/riders/'+key);
-
-    // Hide login box after success
-    document.getElementById('rp-login-box').style.display='none';
-
-    // Fill and show profile
     document.getElementById('rp-name2').textContent=rider.name||'Rider';
     document.getElementById('rp-meta2').textContent=(rider.vehicleType||rider.type||'okada')+' · '+(rider.city||'—');
     document.getElementById('rp-trips2').textContent=(rider.trips||0).toLocaleString();
     document.getElementById('rp-rating2').textContent=rider.rating?'⭐'+rider.rating:'New';
     document.getElementById('rp-area2').textContent=rider.city||'—';
-    document.getElementById('rp-content').style.display='block';
+
+    // ═══════════════════════════════════════════════════════════
+    // PRESENCE — isolated in its own try/catch. If this fails for any
+    // reason, it shows up as a visible toast instead of silently doing
+    // nothing, and it can never block the dashboard from opening above.
+    // ═══════════════════════════════════════════════════════════
+    try{
+      if(key){
+        const presenceRef = window.firebaseDB.ref('presence/riders/'+key);
+        window.firebaseDB.ref('.info/connected').on('value', function(snap){
+          if(snap.val() === true){
+            presenceRef.onDisconnect().set({ online: false, lastSeen: firebase.database.ServerValue.TIMESTAMP })
+              .then(function(){
+                presenceRef.set({ online: true, lastSeen: firebase.database.ServerValue.TIMESTAMP });
+              })
+              .catch(function(e){ showToast('⚠️ Presence write failed: '+e.message); });
+          }
+        }, function(e){ showToast('⚠️ Presence listener failed: '+e.message); });
+        window._embeddedPresenceRef = presenceRef;
+      }
+    }catch(e){
+      showToast('⚠️ Presence setup error: '+e.message);
+    }
+
+    // Ask for push notification permission and save the token against this rider's record
+    try{
+      if(key) window.requestNotificationPermission('fcm_tokens/riders/'+key);
+    }catch(e){ /* never block the dashboard for this */ }
 
     // Detect company rider and toggle relevant sections
-    const isCompanyRider = rider.riderType==='company' || !!rider.companyRiderKey;
-    const subSection = document.getElementById('rp-sub-section');
-    const companyNotice = document.getElementById('rp-company-notice');
-    const payInstruction = document.getElementById('rp-pay-instruction');
-    if(subSection) subSection.style.display = isCompanyRider ? 'none' : 'block';
-    if(companyNotice) companyNotice.style.display = isCompanyRider ? 'block' : 'none';
-    const compEarningsEl = document.getElementById('rp-company-earnings');
-    if(compEarningsEl) compEarningsEl.style.display = isCompanyRider ? 'block' : 'none';
-    if(payInstruction) payInstruction.style.display = isCompanyRider ? 'none' : 'block';
+    try{
+      const isCompanyRider = rider.riderType==='company' || !!rider.companyRiderKey;
+      const subSection = document.getElementById('rp-sub-section');
+      const companyNotice = document.getElementById('rp-company-notice');
+      const payInstruction = document.getElementById('rp-pay-instruction');
+      if(subSection) subSection.style.display = isCompanyRider ? 'none' : 'block';
+      if(companyNotice) companyNotice.style.display = isCompanyRider ? 'block' : 'none';
+      const compEarningsEl = document.getElementById('rp-company-earnings');
+      if(compEarningsEl) compEarningsEl.style.display = isCompanyRider ? 'block' : 'none';
+      if(payInstruction) payInstruction.style.display = isCompanyRider ? 'none' : 'block';
 
-    // Set settlement title immediately based on rider type
-    const _irt = (rider.vehicleType||rider.type||'okada').toLowerCase();
-    const _iim = !_irt.includes('okada') && !_irt.includes('keke') && !_irt.includes('taxi');
-    const _stEl = document.getElementById('rp-settlement-title');
-    if(_stEl) _stEl.textContent = '\u2696\uFE0F My ' + (_iim ? 'Monthly' : 'Weekly') + ' Settlement';
+      // Set settlement title immediately based on rider type
+      const _irt = (rider.vehicleType||rider.type||'okada').toLowerCase();
+      const _iim = !_irt.includes('okada') && !_irt.includes('keke') && !_irt.includes('taxi');
+      const _stEl = document.getElementById('rp-settlement-title');
+      if(_stEl) _stEl.textContent = '\u2696\uFE0F My ' + (_iim ? 'Monthly' : 'Weekly') + ' Settlement';
 
-    loadRiderBookingsInApp(rider.name||'', normalised);
-    if(isCompanyRider) loadCompanyEarningsInApp(rider, normalised);
-    if(!isCompanyRider){
-      window._openRiderForSubStatus = rider; // cache for live pricing updates
-      window._currentRpRider = rider;        // cache for sub_history re-render
-    loadRiderSubStatus(rider.name||'', rider.vehicleType||rider.type||'okada');
-      loadRpSettlementInApp(rider, normalised);
+      loadRiderBookingsInApp(rider.name||'', normalised);
+      if(isCompanyRider) loadCompanyEarningsInApp(rider, normalised);
+      if(!isCompanyRider){
+        window._openRiderForSubStatus = rider; // cache for live pricing updates
+        window._currentRpRider = rider;        // cache for sub_history re-render
+        loadRiderSubStatus(rider.name||'', rider.vehicleType||rider.type||'okada');
+        loadRpSettlementInApp(rider, normalised);
+      }
+      loadRpDedicatedInApp(rider.name||'', normalised, isCompanyRider);
+      showToast('✅ Welcome '+(rider.name||'Rider')+'!');
+    }catch(e){
+      showToast('⚠️ Dashboard loaded, but one section failed: '+e.message);
     }
-    loadRpDedicatedInApp(rider.name||'', normalised, isCompanyRider);
-    showToast('✅ Welcome '+(rider.name||'Rider')+'!');
   }).catch(()=>{err.style.display='block';err.textContent='❌ Connection error. Try again.';});
   } // end doRiderLogin
   doRiderLogin();
