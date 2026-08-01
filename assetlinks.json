@@ -1,8 +1,0 @@
-[{
-      "relation": ["delegate_permission/common.handle_all_urls"],
-      "target": {
-        "namespace": "android_app",
-        "package_name": "app.netlify.ridenaija.twa",
-        "sha256_cert_fingerprints": ["53:94:88:16:0B:40:3B:F6:FB:08:1E:5B:AF:C7:E6:E3:7E:48:1B:6E:3B:AF:5E:41:CA:2B:87:31:AB:9D:86:A0"]
-      }
-    }]
