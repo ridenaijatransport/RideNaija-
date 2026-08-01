@@ -1,8 +1,8 @@
 [{
-      "relation": ["delegate_permission/common.handle_all_urls"],
-      "target": {
-        "namespace": "android_app",
-        "package_name": "app.netlify.ridenaija.twa",
-        "sha256_cert_fingerprints": ["53:94:88:16:0B:40:3B:F6:FB:08:1E:5B:AF:C7:E6:E3:7E:48:1B:6E:3B:AF:5E:41:CA:2B:87:31:AB:9D:86:A0"]
-      }
-    }]
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "app.netlify.ridenaija.twa",
+    "sha256_cert_fingerprints": ["93:08:99:D1:CD:72:61:5A:2E:E2:F6:29:F2:4C:76:31:F0:14:B4:2F:E9:12:28:0A:F4:96:62:BD:2E:FD:34:51"]
+  }
+}]
