@@ -25,3 +25,15 @@
   [headers.values]
     Cache-Control = "no-cache, no-store, must-revalidate"
 
+# Icons and manifest: explicit content-type, defensive against any server-side
+# MIME-type ambiguity that a strict PWA validator could flag.
+[[headers]]
+  for = "/icons/*"
+  [headers.values]
+    Content-Type = "image/png"
+
+[[headers]]
+  for = "/manifest.json"
+  [headers.values]
+    Content-Type = "application/manifest+json"
+
