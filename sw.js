@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ridenaija-v25';
+const CACHE_NAME = 'ridenaija-v26';
 const ASSETS = ['/', '/index.html', '/admin.html', '/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', e => {

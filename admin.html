@@ -50,6 +50,12 @@
           reg.update().catch(function(){});
         } catch (e) { console.error('[RideNaija] SW cleanup error:', e); }
       })();
+      var _rnSwRefreshedAdmin = false;
+      navigator.serviceWorker.addEventListener('controllerchange', function(){
+        if (_rnSwRefreshedAdmin) return;
+        _rnSwRefreshedAdmin = true;
+        window.location.reload();
+      });
     }
 
     // ═══════════════════════════════════════════════════════════

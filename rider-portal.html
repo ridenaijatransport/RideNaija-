@@ -255,6 +255,12 @@ if ('serviceWorker' in navigator) {
       reg.update().catch(()=>{});
     } catch (e) { console.error('[RideNaija] SW cleanup error:', e); }
   })();
+  let _rnSwRefreshedRider = false;
+  navigator.serviceWorker.addEventListener('controllerchange', function(){
+    if (_rnSwRefreshedRider) return;
+    _rnSwRefreshedRider = true;
+    window.location.reload();
+  });
 }
 
 
