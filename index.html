@@ -3,7 +3,25 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
-<title>RideNaija – Rides & Delivery</title>
+<title>RideNaija – Fast Delivery, Food & Market Runs in Nigeria</title>
+<meta name="description" content="RideNaija connects you with verified delivery riders across Nigeria — book a delivery, order food, or send someone to the market, all with real distance-based pricing. No account needed."/>
+<meta name="keywords" content="RideNaija, delivery Nigeria, food delivery Nigeria, market delivery, dispatch rider, Suleja delivery, Abuja delivery"/>
+<link rel="canonical" href="https://ridenaija.netlify.app/"/>
+
+<!-- Open Graph — controls the preview card shown when this link is shared
+     on WhatsApp, Twitter, Facebook, etc. Update og:url and og:image once
+     the custom domain is live; everything else can stay as-is. -->
+<meta property="og:type" content="website"/>
+<meta property="og:site_name" content="RideNaija"/>
+<meta property="og:title" content="RideNaija – Fast Delivery, Food & Market Runs"/>
+<meta property="og:description" content="Book a delivery, order food, or send someone to the market — verified riders, fair distance-based pricing, no account needed."/>
+<meta property="og:url" content="https://ridenaija.netlify.app/"/>
+<meta property="og:image" content="https://ridenaija.netlify.app/icons/icon-512.png"/>
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="RideNaija – Fast Delivery, Food & Market Runs"/>
+<meta name="twitter:description" content="Book a delivery, order food, or send someone to the market — verified riders, fair distance-based pricing."/>
+<meta name="twitter:image" content="https://ridenaija.netlify.app/icons/icon-512.png"/>
+
 <link rel="manifest" href="/manifest.json"/>
 <meta name="theme-color" content="#00b865"/>
 <meta name="mobile-web-app-capable" content="yes"/>
@@ -11,6 +29,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="apple-mobile-web-app-title" content="RideNaija"/>
 <link rel="apple-touch-icon" href="icons/icon-192.png"/>
+<link rel="icon" type="image/png" href="icons/icon-192.png"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
 <script src="https://js.paystack.co/v1/inline.js"></script>
 
@@ -224,6 +243,15 @@
       }
     });
 
+    // Load admin-defined area/route pairs (the Area Distance Table) — saved
+    // by admin via saveAreaPair(). Previously this only ever lived in the
+    // admin's own browser localStorage, so a customer's phone never saw it
+    // and detectZone() silently skipped straight to guesswork. Now synced
+    // through Firebase like fare_pricing above, so it works on every device.
+    _db.ref('area_pairs').on('value', function(snapshot){
+      localStorage.setItem('rn_area_pairs', JSON.stringify(snapshot.val() || []));
+    });
+
     // Load restaurants for Food tab
     _db.ref('restaurants').on('value', function(snapshot){
       var data = snapshot.val();
@@ -231,6 +259,16 @@
         ? Object.entries(data).map(function(e){ return Object.assign({}, e[1], {fbKey: e[0]}); }).filter(function(r){ return r.active !== false; })
         : [];
       if(typeof renderFoodTab === 'function') renderFoodTab();
+    });
+
+    // Load marketplace shops (Market → Line → Shop Number) for the Markets
+    // browse tab — mirrors the restaurants listener above exactly.
+    _db.ref('shops').on('value', function(snapshot){
+      var data = snapshot.val();
+      window.LIVE_SHOPS = data
+        ? Object.entries(data).map(function(e){ return Object.assign({}, e[1], {fbKey: e[0]}); }).filter(function(s){ return s.status !== 'inactive'; })
+        : [];
+      if(typeof renderMarketsBrowse === 'function' && _foodCategoryFilter === 'Markets') renderMarketsBrowse();
     });
 
   } catch(e) {
@@ -250,6 +288,29 @@
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;}
+
+/* DESKTOP LAYOUT — this app is built mobile-first (matches how almost
+   everyone actually uses it), so on a wide screen we present it as a
+   centered app panel over a softly-lit backdrop rather than stretching
+   the top bar / bottom nav full-width over empty black space, which
+   looked broken when opened on a laptop. Nothing below changes any
+   mobile styling — it only applies above 640px. */
+@media (min-width:640px){
+  body{
+    background:
+      radial-gradient(ellipse at top, rgba(0,184,101,0.10), transparent 60%),
+      var(--bg);
+    display:flex; justify-content:center;
+  }
+  #app-shell{
+    width:100%; max-width:480px;
+    min-height:100vh;
+    background:var(--bg);
+    box-shadow:0 0 60px rgba(0,0,0,0.5);
+    border-left:1px solid var(--border);
+    border-right:1px solid var(--border);
+  }
+}
 body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 60% 40% at 80% 10%,rgba(0,184,101,0.09) 0%,transparent 70%);pointer-events:none;z-index:0;}
 
 /* SPLASH */
@@ -343,7 +404,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 @keyframes bl{0%,100%{opacity:1}50%{opacity:0.3}}
 .bk-body{padding:16px;}
 
-.svc-tabs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:14px;}
+.svc-tabs{display:grid;grid-template-columns:repeat(auto-fit,minmax(84px,1fr));gap:6px;margin-bottom:14px;}
 .svc-tab{border:1.5px solid var(--border);background:transparent;color:var(--muted);padding:9px 4px;border-radius:11px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:0.72rem;font-weight:600;text-align:center;transition:all 0.2s;display:flex;flex-direction:column;align-items:center;gap:2px;}
 .svc-tab .ic{font-size:1.15rem;}
 .svc-tab.active{border-color:var(--green);background:var(--gl);color:var(--green);}
@@ -488,6 +549,9 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 
 /* BOTTOM NAV */
 .bnav{position:fixed;bottom:0;left:0;right:0;z-index:100;background:rgba(10,15,13,0.96);backdrop-filter:blur(14px);border-top:1px solid var(--border);display:flex;justify-content:space-around;padding:8px 0;padding-bottom:calc(8px + env(safe-area-inset-bottom));}
+@media (min-width:640px){
+  .bnav{ left:50%; right:auto; transform:translateX(-50%); width:100%; max-width:480px; }
+}
 .ni{display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;color:var(--muted);transition:color 0.2s;font-size:0.55rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;padding:3px 9px;border:none;background:transparent;}
 .ni .ic{font-size:1.1rem;}
 .ni.active{color:var(--green);}
@@ -500,7 +564,6 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 .food-rst-info{flex:1;}
 .food-rst-name{font-family:'Syne',sans-serif;font-size:0.95rem;font-weight:800;margin-bottom:2px;}
 .food-rst-loc{font-size:0.68rem;color:var(--muted);}
-.food-rst-fee{font-size:0.66rem;background:rgba(249,115,22,0.15);color:#f97316;padding:3px 8px;border-radius:8px;font-weight:700;}
 .food-menu-list{padding:10px 14px 4px;}
 .food-menu-item{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border);}
 .food-menu-item:last-child{border-bottom:none;}
@@ -539,11 +602,12 @@ input:checked+.slider::before{transform:translateX(18px);}
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
+<div id="app-shell">
 
 <!-- SPLASH -->
 <div id="splash">
   <div class="spl-logo">Ride<span>Naija</span></div>
-  <div class="spl-sub">🇳🇬 Rides · Delivery · Goods Transport</div>
+  <div class="spl-sub">🇳🇬 Delivery · Food · Market Runs</div>
   <div class="spl-bar"></div>
 </div>
 
@@ -559,8 +623,8 @@ input:checked+.slider::before{transform:translateX(18px);}
 <!-- ══════ HOME ══════ -->
 <div class="page active" id="page-home">
   <section class="hero">
-    <div class="hero-tag">🇳🇬 Rides · Goods · Delivery</div>
-    <h1>Book Rides &amp; <em>Transport Goods</em> Anywhere</h1>
+    <div class="hero-tag">🇳🇬 Delivery · Food · Market</div>
+    <h1>Fast Delivery &amp; <em>Market Runs</em>, Anywhere</h1>
     <p>Verified operators near you — fast, safe &amp; affordable.</p>
     <div class="stats-row">
       <div class="st"><div class="st-n" id="h-stat-rides">0</div><div class="st-l">Rides</div></div>
@@ -585,12 +649,18 @@ input:checked+.slider::before{transform:translateX(18px);}
       </div>
       <div class="bk-body">
         <div class="svc-tabs">
-          <button class="svc-tab active" onclick="selSvc(this,'okada')"><span class="ic">🏍️</span>Okada</button>
-          <button class="svc-tab" onclick="selSvc(this,'keke')"><span class="ic">🛺</span>Keke</button>
-          <button class="svc-tab" onclick="selSvc(this,'taxi')"><span class="ic">🚖</span>Taxi</button>
-          <button class="svc-tab" onclick="selSvc(this,'royal_ride')"><span class="ic">👑</span>Royal Ride</button>
-          <button class="svc-tab" onclick="selSvc(this,'goods')"><span class="ic">🚛</span>Goods</button>
-          <button class="svc-tab" onclick="selSvc(this,'dedicated')"><span class="ic">📅</span>Dedicated</button>
+          <!-- RIDE_LOCK: Okada/Keke/Taxi/Royal Ride/Dedicated/Goods are hidden
+               while only Delivery/Food/Market are launched. To bring any of
+               these back later, just delete its "display:none" — nothing
+               else needs to change, the booking logic underneath is
+               untouched. -->
+          <button class="svc-tab" onclick="selSvc(this,'okada')" style="display:none;"><span class="ic">🏍️</span>Okada</button>
+          <button class="svc-tab" onclick="selSvc(this,'keke')" style="display:none;"><span class="ic">🛺</span>Keke</button>
+          <button class="svc-tab" onclick="selSvc(this,'taxi')" style="display:none;"><span class="ic">🚖</span>Taxi</button>
+          <button class="svc-tab" onclick="selSvc(this,'royal_ride')" style="display:none;"><span class="ic">👑</span>Royal Ride</button>
+          <button class="svc-tab active" onclick="selSvc(this,'delivery')"><span class="ic">📦</span>Delivery</button>
+          <button class="svc-tab" onclick="selSvc(this,'goods')" style="display:none;"><span class="ic">🚛</span>Goods</button>
+          <button class="svc-tab" onclick="selSvc(this,'dedicated')" style="display:none;"><span class="ic">📅</span>Dedicated</button>
           <button class="svc-tab" onclick="selSvc(this,'market')"><span class="ic">🛒</span>Market</button>
         </div>
 
@@ -608,6 +678,73 @@ input:checked+.slider::before{transform:translateX(18px);}
 
         <!-- GOODS CATEGORIES -->
              <!-- MARKET ORDER SECTION -->
+        <div id="delivery-section" style="display:block;">
+          <div style="background:linear-gradient(135deg,rgba(0,184,101,0.1),rgba(0,143,76,0.05));border:1.5px solid rgba(0,184,101,0.3);border-radius:14px;padding:13px;margin-bottom:12px;">
+            <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:1rem;color:var(--green);margin-bottom:3px;">Send it. Fetch it. We'll handle the road.</div>
+            <div style="font-size:0.7rem;color:var(--muted);line-height:1.6;">Fill in the details below and we'll confirm your pickup, drop-off and delivery fee before any rider is assigned.</div>
+          </div>
+
+          <div class="form-group"><label>FULL NAME</label><input type="text" id="del-name" placeholder="e.g. Amina Yusuf" style="width:100%;background:var(--card2);border:1.5px solid var(--border);border-radius:9px;padding:11px 13px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;box-sizing:border-box;"/></div>
+
+          <div class="form-group"><label>YOUR PHONE NUMBER (SENDER)</label><input type="tel" id="del-phone" placeholder="080..." style="width:100%;background:var(--card2);border:1.5px solid var(--border);border-radius:9px;padding:11px 13px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;box-sizing:border-box;"/></div>
+
+          <div class="form-group"><label>PICKUP LOCATION</label><input type="text" id="del-pickup" placeholder="Vendor or address" oninput="calcDeliveryFee()" style="width:100%;background:var(--card2);border:1.5px solid var(--border);border-radius:9px;padding:11px 13px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;box-sizing:border-box;"/></div>
+
+          <div class="form-group"><label>DROP-OFF LOCATION</label><input type="text" id="del-dest" placeholder="Where should it go?" oninput="calcDeliveryFee()" style="width:100%;background:var(--card2);border:1.5px solid var(--border);border-radius:9px;padding:11px 13px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;box-sizing:border-box;"/></div>
+
+          <div style="text-align:center;margin:-6px 0 12px;">
+            <a href="javascript:void(0)" onclick="openDeliveryPinMap()" style="color:var(--green);font-size:0.76rem;font-weight:600;text-decoration:underline;">📍 Pin exact spot on map (optional, helps your rider navigate)</a>
+            <div id="del-pin-status" style="font-size:0.68rem;color:var(--muted);margin-top:4px;"></div>
+          </div>
+
+          <div class="form-group"><label>RECEIVER'S PHONE NUMBER</label><input type="tel" id="del-receiver-phone" placeholder="Phone number of whoever's collecting it" style="width:100%;background:var(--card2);border:1.5px solid var(--border);border-radius:9px;padding:11px 13px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;box-sizing:border-box;"/></div>
+
+          <div class="form-group"><label>WHAT ARE WE MOVING?</label>
+            <select id="del-category" style="width:100%;background:var(--card2);border:1.5px solid var(--border);border-radius:9px;padding:11px 13px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;box-sizing:border-box;">
+              <option value="Food / small chops">Food / small chops</option>
+              <option value="Documents / files">Documents / files</option>
+              <option value="Electronics">Electronics</option>
+              <option value="Clothing / fashion items">Clothing / fashion items</option>
+              <option value="Groceries">Groceries</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          <div class="form-group"><label>WHEN?</label>
+            <select id="del-when" style="width:100%;background:var(--card2);border:1.5px solid var(--border);border-radius:9px;padding:11px 13px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;box-sizing:border-box;">
+              <option value="As soon as possible">As soon as possible</option>
+              <option value="Later today">Later today</option>
+              <option value="Tomorrow">Tomorrow</option>
+            </select>
+          </div>
+
+          <div class="form-group"><label>NOTES (OPTIONAL)</label><textarea id="del-notes" placeholder="Anything the rider should know" style="width:100%;background:var(--card2);border:1.5px solid var(--border);border-radius:9px;padding:11px 13px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;box-sizing:border-box;min-height:60px;"></textarea></div>
+
+          <!-- Payment method -->
+          <div style="margin-bottom:12px;">
+            <div style="font-size:0.65rem;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:6px;">Payment Method</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+              <button id="del-pay-card" onclick="selDeliveryPay('Card')" style="padding:10px 4px;border:1.5px solid var(--border);background:transparent;border-radius:10px;font-family:'Syne',sans-serif;font-weight:700;font-size:0.7rem;color:var(--muted);cursor:pointer;">💳 Pay Now</button>
+              <button id="del-pay-wallet" onclick="selDeliveryPay('Wallet')" style="padding:10px 4px;border:1.5px solid var(--border);background:transparent;border-radius:10px;font-family:'Syne',sans-serif;font-weight:700;font-size:0.7rem;color:var(--muted);cursor:pointer;">👛 Wallet</button>
+              <button id="del-pay-cash" onclick="selDeliveryPay('Cash')" style="padding:10px 4px;border:1.5px solid var(--green);background:var(--gl);border-radius:10px;font-family:'Syne',sans-serif;font-weight:700;font-size:0.7rem;color:var(--green);cursor:pointer;">💵 On Delivery</button>
+            </div>
+            <div id="del-pay-account" style="display:none;margin-top:8px;background:rgba(79,158,255,0.08);border:1px solid rgba(79,158,255,0.25);border-radius:9px;padding:10px 12px;font-size:0.78rem;line-height:1.7;">
+              💳 <strong style="color:var(--text);">Pay securely via Paystack</strong> — card, bank transfer, or USSD. Tap Book this delivery below to pay; your order is booked automatically the moment payment is confirmed.
+            </div>
+            <div id="del-pay-wallet-note" style="display:none;margin-top:8px;background:rgba(0,184,101,0.08);border:1px solid rgba(0,184,101,0.25);border-radius:9px;padding:10px 12px;font-size:0.78rem;line-height:1.7;">
+              👛 <strong style="color:var(--text);">Wallet Balance:</strong> <span id="del-pay-wallet-bal">₦0.00</span> — the delivery fee will be deducted instantly when you book.
+            </div>
+          </div>
+
+          <div id="del-fee-summary" style="display:none;background:var(--card);border:1.5px solid rgba(0,184,101,0.3);border-radius:12px;padding:12px;margin-bottom:12px;">
+            <div style="display:flex;justify-content:space-between;font-family:'Syne',sans-serif;font-weight:800;font-size:0.95rem;"><span>Delivery fee</span><span id="del-fee-amt" style="color:var(--green);">₦0</span></div>
+            <div id="del-fee-note" style="font-size:0.66rem;color:var(--muted);margin-top:3px;"></div>
+          </div>
+
+          <button class="green-btn" onclick="bookCustomerDelivery()" style="width:100%;">Book this delivery →</button>
+          <div style="text-align:center;font-size:0.68rem;color:var(--muted);margin-top:8px;">Your order is recorded instantly and sent to dispatch. No account needed.</div>
+        </div>
+
         <div id="market-section" style="display:none;">
 
           <!-- Header card -->
@@ -644,7 +781,7 @@ input:checked+.slider::before{transform:translateX(18px);}
           <!-- Market name input -->
           <div style="margin-bottom:10px;">
             <div style="font-size:0.65rem;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:4px;">Market / Shop Name</div>
-            <input type="text" id="mkt-market" placeholder="e.g. Suleja Main Market, Karu Market..." style="width:100%;background:var(--card2);border:1.5px solid var(--border);border-radius:9px;padding:10px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;box-sizing:border-box;"/>
+            <input type="text" id="mkt-market" placeholder="e.g. Suleja Main Market, Karu Market..." oninput="calcMarketTotal()" style="width:100%;background:var(--card2);border:1.5px solid var(--border);border-radius:9px;padding:10px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;box-sizing:border-box;"/>
           </div>
 
           <!-- Items list -->
@@ -670,7 +807,7 @@ input:checked+.slider::before{transform:translateX(18px);}
           <!-- Delivery address -->
           <div style="margin-bottom:10px;">
             <div style="font-size:0.65rem;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:4px;">Deliver To (Your Address)</div>
-            <input type="text" id="mkt-delivery-addr" placeholder="e.g. No. 5 PDP Quarters, Suleja" style="width:100%;background:var(--card2);border:1.5px solid var(--border);border-radius:9px;padding:10px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;box-sizing:border-box;"/>
+            <input type="text" id="mkt-delivery-addr" placeholder="e.g. No. 5 PDP Quarters, Suleja" oninput="calcMarketTotal()" style="width:100%;background:var(--card2);border:1.5px solid var(--border);border-radius:9px;padding:10px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;box-sizing:border-box;"/>
           </div>
 
           <!-- Phone -->
@@ -682,12 +819,13 @@ input:checked+.slider::before{transform:translateX(18px);}
           <!-- Payment method -->
           <div style="margin-bottom:12px;">
             <div style="font-size:0.65rem;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:6px;">Payment Method</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-              <button id="mkt-pay-card" onclick="selMarketPay('Card')" style="padding:10px;border:1.5px solid var(--green);background:var(--gl);border-radius:10px;font-family:'Syne',sans-serif;font-weight:700;font-size:0.75rem;color:var(--green);cursor:pointer;">💳 Pay Now (Card/Transfer)</button>
-              <button id="mkt-pay-cash" onclick="selMarketPay('Cash')" style="padding:10px;border:1.5px solid var(--border);background:transparent;border-radius:10px;font-family:'Syne',sans-serif;font-weight:700;font-size:0.75rem;color:var(--muted);cursor:pointer;">💵 Pay on Delivery</button>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+              <button id="mkt-pay-card" onclick="selMarketPay('Card')" style="padding:10px 4px;border:1.5px solid var(--green);background:var(--gl);border-radius:10px;font-family:'Syne',sans-serif;font-weight:700;font-size:0.7rem;color:var(--green);cursor:pointer;">💳 Pay Now</button>
+              <button id="mkt-pay-wallet" onclick="selMarketPay('Wallet')" style="padding:10px 4px;border:1.5px solid var(--border);background:transparent;border-radius:10px;font-family:'Syne',sans-serif;font-weight:700;font-size:0.7rem;color:var(--muted);cursor:pointer;">👛 Wallet</button>
+              <button id="mkt-pay-cash" onclick="selMarketPay('Cash')" style="padding:10px 4px;border:1.5px solid var(--border);background:transparent;border-radius:10px;font-family:'Syne',sans-serif;font-weight:700;font-size:0.7rem;color:var(--muted);cursor:pointer;">💵 On Delivery</button>
             </div>
             <div id="mkt-pay-note" style="font-size:0.68rem;color:var(--muted);margin-top:6px;padding:6px 8px;background:var(--card);border-radius:8px;">
-              💳 Pay Now: Transfer budget + delivery fee to our account. Agent goes to market immediately after confirmation.
+              💳 <strong>Pay Now:</strong> Pay securely via Paystack — card, bank transfer, or USSD. Your order is placed automatically the moment payment is confirmed.
             </div>
           </div>
 
@@ -919,8 +1057,8 @@ input:checked+.slider::before{transform:translateX(18px);}
         <div class="goods-section" id="goods-desc-section">
           <div class="form-group"><label>📝 Describe Goods</label><textarea id="goods-desc" placeholder="e.g. 50 bags of cement, furniture..."></textarea></div>
         </div>
-        <div class="form-group"><label>📞 Your Phone Number</label><input type="tel" id="bk-phone" placeholder="080xxxxxxxx — rider will call this number"/></div>
-        <div class="form-group"><label>💳 How to Pay</label>
+        <div class="form-group" id="bk-phone-group"><label>📞 Your Phone Number</label><input type="tel" id="bk-phone" placeholder="080xxxxxxxx — rider will call this number"/></div>
+        <div class="form-group" id="bk-pay-group"><label>💳 How to Pay</label>
           <div class="pay-row" style="grid-template-columns:repeat(4,1fr);">
             <div class="pay-opt active" onclick="selPay(this,'cash')"><span class="pi">💵</span>Cash</div>
             <div class="pay-opt" onclick="selPay(this,'card')"><span class="pi">💳</span>Card</div>
@@ -931,14 +1069,21 @@ input:checked+.slider::before{transform:translateX(18px);}
             💵 <strong style="color:var(--text);">Cash:</strong> Pay the rider directly when they arrive. Most popular in Nigeria.
           </div>
         </div>
-        <div class="fare-row"><span class="fare-lbl">Estimated Fare</span><span class="fare-amt" id="fare-disp">₦ —</span></div>
+        <div class="fare-row" id="bk-fare-row"><span class="fare-lbl">Estimated Fare</span><span class="fare-amt" id="fare-disp">₦ —</span></div>
         <div class="pay-ok" id="pay-ok">✅ Payment confirmed! Booking operator...</div>
         <button class="green-btn" id="bk-btn" onclick="bookRide()">🚀 Book Now</button>
       </div>
     </div>
 
     <!-- SMART RIDER FINDER -->
-    <div style="position:relative;z-index:1;">
+    <!-- RIDE_LOCK: This whole "Find a Rider Near You" block (area search +
+         vehicle filter + rider list) is ride-booking related, same as
+         Okada/Keke/Taxi/Royal/Dedicated/Goods above, and is hidden for the
+         same reason: with no ride types bookable right now it only ever
+         shows "No verified operators yet", which is confusing rather than
+         useful. To bring it back once rides relaunch, just delete this one
+         style="display:none;" — nothing else needs to change. -->
+    <div style="position:relative;z-index:1;display:none;">
       <div style="max-width:480px;margin:0 auto;">
 
         <!-- AREA FILTER -->
@@ -1095,6 +1240,8 @@ input:checked+.slider::before{transform:translateX(18px);}
     <div class="card-block">
 
       <div class="row-item" onclick="openFullscreen('rider-portal')"><div class="ri-icon ri-green">🏍️</div><div class="ri-info"><div class="ri-title">Rider Portal — My Bookings</div><div class="ri-sub">View your bookings & earnings</div></div><div class="ri-right">›</div></div>
+      <div class="row-item" onclick="window.location.href='partner-portal.html'"><div class="ri-icon ri-green">🏪</div><div class="ri-info"><div class="ri-title">Partner Portal</div><div class="ri-sub">Manage your business orders & menu</div></div><div class="ri-right">›</div></div>
+      <div class="row-item" onclick="window.location.href='register-partner.html'"><div class="ri-icon ri-green">📋</div><div class="ri-info"><div class="ri-title">Become a Partner</div><div class="ri-sub">Register your business with RideNaija</div></div><div class="ri-right">›</div></div>
       <div class="row-item" onclick="openFullscreen('reg-rider')"><div class="ri-icon" style="background:rgba(79,158,255,0.15);">📝</div><div class="ri-info"><div class="ri-title">Register as a Rider</div><div class="ri-sub">Join RideNaija as a driver</div></div><div class="ri-right">›</div></div>
       <div class="row-item" onclick="openSubpage('help')"><div class="ri-icon ri-blue">💬</div><div class="ri-info"><div class="ri-title">Help &amp; Support</div><div class="ri-sub">FAQs, call, WhatsApp</div></div><div class="ri-right">›</div></div>
     </div>
@@ -1204,8 +1351,8 @@ input:checked+.slider::before{transform:translateX(18px);}
       <div style="font-family:'Syne',sans-serif;font-size:0.9rem;font-weight:800;margin-bottom:10px;">Frequently Asked Questions</div>
 
       <div onclick="this.querySelector('.faq-ans').style.display=this.querySelector('.faq-ans').style.display==='none'?'block':'none'" style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:13px 14px;margin-bottom:8px;cursor:pointer;">
-        <div style="display:flex;justify-content:space-between;font-size:0.84rem;font-weight:600;">How do I book a ride? <span style="color:var(--muted);">›</span></div>
-        <div class="faq-ans" style="display:none;font-size:0.76rem;color:var(--muted);margin-top:8px;line-height:1.6;">Enter your pickup location and destination, choose ride type (Okada, Keke, or Goods), select payment method and tap Book Now. No registration needed — just your phone number.</div>
+        <div style="display:flex;justify-content:space-between;font-size:0.84rem;font-weight:600;">How do I book a delivery? <span style="color:var(--muted);">›</span></div>
+        <div class="faq-ans" style="display:none;font-size:0.76rem;color:var(--muted);margin-top:8px;line-height:1.6;">Enter your pickup location and destination, tell us what you're sending, choose Pay Now or Pay on Delivery, and tap Book. No registration needed — just your phone number.</div>
       </div>
 
       <div onclick="this.querySelector('.faq-ans').style.display=this.querySelector('.faq-ans').style.display==='none'?'block':'none'" style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:13px 14px;margin-bottom:8px;cursor:pointer;">
@@ -1219,9 +1366,10 @@ input:checked+.slider::before{transform:translateX(18px);}
       </div>
 
       <div onclick="this.querySelector('.faq-ans').style.display=this.querySelector('.faq-ans').style.display==='none'?'block':'none'" style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:13px 14px;margin-bottom:8px;cursor:pointer;">
-        <div style="display:flex;justify-content:space-between;font-size:0.84rem;font-weight:600;">What goods transport is available? <span style="color:var(--muted);">›</span></div>
-        <div class="faq-ans" style="display:none;font-size:0.76rem;color:var(--muted);margin-top:8px;line-height:1.6;">Aboki Keke Cargo, Mini Van/Sienna, Pickup Truck, Cargo Truck/Small (popular in Suleja) for light/medium goods; and Lorry/Bedford, Tipper Truck, Royal Trailer, Flatbed/Low-Loader for heavy goods. Select Goods on the home screen to see all options. Taxi is available in FCT Abuja and parts of Lagos where Okada and Keke are restricted.</div>
+        <div style="display:flex;justify-content:space-between;font-size:0.84rem;font-weight:600;">How is the delivery fee worked out? <span style="color:var(--muted);">›</span></div>
+        <div class="faq-ans" style="display:none;font-size:0.76rem;color:var(--muted);margin-top:8px;line-height:1.6;">We work out the real road distance between your pickup and drop-off and charge by distance band, so the fee reflects how far the rider actually travels rather than a flat rate.</div>
       </div>
+
 
       <div onclick="this.querySelector('.faq-ans').style.display=this.querySelector('.faq-ans').style.display==='none'?'block':'none'" style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:13px 14px;margin-bottom:8px;cursor:pointer;">
         <div style="display:flex;justify-content:space-between;font-size:0.84rem;font-weight:600;">How do I become a rider? <span style="color:var(--muted);">›</span></div>
@@ -1238,6 +1386,43 @@ input:checked+.slider::before{transform:translateX(18px);}
         <div class="faq-ans" style="display:none;font-size:0.76rem;color:var(--muted);margin-top:8px;line-height:1.6;">After booking, a live map appears showing your current location. When prompted, allow location access. The map updates as you move so the rider can find you easily.</div>
       </div>
 
+    </div>
+  </div>
+
+  <!-- ABOUT / CONTACT — reads as a proper "about us" section when this URL
+       is opened as a website (desktop, shared link, someone checking the
+       business out); simply lives at the bottom of the same Home page and
+       doesn't interfere with the booking flow for regular app users, who
+       rarely scroll this far. -->
+  <div style="padding:28px 16px 8px;">
+    <div style="max-width:480px;margin:0 auto;">
+      <h3 style="font-family:'Syne',sans-serif;font-size:1rem;font-weight:800;margin-bottom:10px;">About RideNaija</h3>
+      <p style="font-size:0.8rem;color:var(--muted);line-height:1.7;margin-bottom:20px;">
+        Need something moved across town, fast? RideNaija runs delivery, food orders, and market errands within <strong style="color:var(--text);">Suleja and beyond</strong> — verified riders, real distance-based pricing, and no account or app-store install required to get started. Order in minutes, pay however suits you (cash, card, transfer, or wallet), and track your rider live from pickup to your door. Ride booking is next on the way.
+      </p>
+
+      <h3 style="font-family:'Syne',sans-serif;font-size:1rem;font-weight:800;margin-bottom:10px;">Get in Touch</h3>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:24px;">
+        <a href="mailto:ridenaijatransport@gmail.com" style="display:flex;align-items:center;gap:8px;padding:11px 14px;background:var(--card);border:1px solid var(--border);border-radius:10px;color:var(--text);text-decoration:none;font-size:0.8rem;">📧 ridenaijatransport@gmail.com</a>
+        <div style="font-size:0.68rem;color:var(--muted);margin:6px 0 0;text-transform:uppercase;letter-spacing:0.3px;">Call or WhatsApp to book</div>
+        <div style="display:flex;gap:8px;">
+          <a href="tel:08120715812" style="flex:1;text-align:center;padding:10px 6px;background:var(--card);border:1px solid var(--border);border-radius:10px;color:var(--text);text-decoration:none;font-size:0.76rem;">📞 0812 071 5812</a>
+          <a href="https://wa.me/2348120715812" target="_blank" style="padding:10px 12px;background:var(--card);border:1px solid var(--border);border-radius:10px;color:var(--text);text-decoration:none;font-size:0.9rem;">💬</a>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <a href="tel:08102996721" style="flex:1;text-align:center;padding:10px 6px;background:var(--card);border:1px solid var(--border);border-radius:10px;color:var(--text);text-decoration:none;font-size:0.76rem;">📞 0810 299 6721</a>
+          <a href="https://wa.me/2348102996721" target="_blank" style="padding:10px 12px;background:var(--card);border:1px solid var(--border);border-radius:10px;color:var(--text);text-decoration:none;font-size:0.9rem;">💬</a>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <a href="tel:09051718410" style="flex:1;text-align:center;padding:10px 6px;background:var(--card);border:1px solid var(--border);border-radius:10px;color:var(--text);text-decoration:none;font-size:0.76rem;">📞 0905 171 8410</a>
+          <a href="https://wa.me/2349051718410" target="_blank" style="padding:10px 12px;background:var(--card);border:1px solid var(--border);border-radius:10px;color:var(--text);text-decoration:none;font-size:0.9rem;">💬</a>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border);padding-top:16px;text-align:center;">
+        <p style="font-size:0.68rem;color:var(--muted);margin-bottom:6px;">© 2026 RideNaija. Made in Nigeria 🇳🇬</p>
+        <a href="/privacy.html" style="font-size:0.68rem;color:var(--muted);text-decoration:underline;">Privacy Policy</a>
+      </div>
     </div>
   </div>
 </div>
@@ -1257,6 +1442,7 @@ input:checked+.slider::before{transform:translateX(18px);}
     <button class="cat-pill" data-cat="Fashion" onclick="setFoodCategoryFilter('Fashion',this)" style="flex-shrink:0;padding:7px 14px;border-radius:20px;border:1px solid var(--border);background:var(--card);color:var(--text);font-weight:700;font-size:0.76rem;white-space:nowrap;">👗 Fashion</button>
     <button class="cat-pill" data-cat="Electronics" onclick="setFoodCategoryFilter('Electronics',this)" style="flex-shrink:0;padding:7px 14px;border-radius:20px;border:1px solid var(--border);background:var(--card);color:var(--text);font-weight:700;font-size:0.76rem;white-space:nowrap;">📱 Electronics</button>
     <button class="cat-pill" data-cat="Other" onclick="setFoodCategoryFilter('Other',this)" style="flex-shrink:0;padding:7px 14px;border-radius:20px;border:1px solid var(--border);background:var(--card);color:var(--text);font-weight:700;font-size:0.76rem;white-space:nowrap;">✨ Other</button>
+    <button class="cat-pill" data-cat="Markets" onclick="setFoodCategoryFilter('Markets',this)" style="flex-shrink:0;padding:7px 14px;border-radius:20px;border:1px solid var(--border);background:var(--card);color:var(--text);font-weight:700;font-size:0.76rem;white-space:nowrap;">🏪 Markets</button>
   </div>
 
   <!-- EMPTY STATE (shown until restaurants load) -->
@@ -1269,6 +1455,32 @@ input:checked+.slider::before{transform:translateX(18px);}
 
   <!-- VENDOR LIST -->
   <div id="food-rst-list"></div>
+
+  <!-- MARKETS BROWSE — Market → Line → Shop → Catalog. Hidden unless the
+       🏪 Markets pill is active. Walks the same physical-market structure
+       a customer would use in person: pick a market, pick a line (if that
+       market has them), pick a shop, browse its catalog. -->
+  <div id="market-browse" style="display:none;">
+    <div style="padding:0 16px 10px;">
+      <input id="market-search" type="text" placeholder="🔍 Search for a product across every market..." oninput="searchMarketProducts(this.value)"
+        style="width:100%;padding:11px 14px;border-radius:10px;border:1.5px solid var(--border);background:var(--card);color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.84rem;outline:none;"/>
+    </div>
+    <div id="market-breadcrumb" style="display:none;padding:0 16px 10px;font-size:0.76rem;color:var(--muted);"></div>
+    <div id="market-browse-list" style="padding:0 16px;"></div>
+  </div>
+</div>
+
+<!-- VENDOR DETAIL OVERLAY — opens when a vendor card is tapped, shows only
+     that vendor's items with bigger photos and cart controls, instead of
+     every vendor's full menu stacked on one page. -->
+<div id="vendor-detail-overlay" style="display:none;position:fixed;inset:0;z-index:500;background:var(--bg);overflow-y:auto;">
+  <div style="position:sticky;top:0;z-index:5;background:rgba(10,15,13,0.95);backdrop-filter:blur(14px);border-bottom:1px solid var(--border);padding:14px 16px;display:flex;align-items:center;gap:12px;">
+    <button onclick="closeVendorDetail()" style="background:transparent;border:none;color:var(--text);font-size:1.3rem;cursor:pointer;padding:0;">‹</button>
+    <div id="vendor-detail-name" style="font-family:'Syne',sans-serif;font-weight:800;font-size:1rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Vendor</div>
+  </div>
+  <div id="vendor-detail-banner" style="width:100%;height:150px;background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:3rem;overflow:hidden;"></div>
+  <div id="vendor-detail-meta" style="padding:14px 16px;border-bottom:1px solid var(--border);"></div>
+  <div id="vendor-detail-items" style="padding:14px 16px 100px;"></div>
 </div>
 
 <!-- FOOD CART BAR -->
@@ -1295,7 +1507,7 @@ input:checked+.slider::before{transform:translateX(18px);}
     <!-- DELIVERY DETAILS -->
     <div style="margin-bottom:10px;">
       <label style="font-size:0.67rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;display:block;margin-bottom:4px;">📍 Delivery Address</label>
-      <input type="text" id="food-addr" placeholder="e.g. No. 5 PDP Quarters, Suleja" style="width:100%;background:var(--card2);border:1.5px solid var(--border);border-radius:9px;padding:10px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;box-sizing:border-box;"/>
+      <input type="text" id="food-addr" placeholder="e.g. No. 5 PDP Quarters, Suleja" oninput="recalcFoodDeliveryFee()" style="width:100%;background:var(--card2);border:1.5px solid var(--border);border-radius:9px;padding:10px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;box-sizing:border-box;"/>
     </div>
     <div style="margin-bottom:12px;">
       <label style="font-size:0.67rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;display:block;margin-bottom:4px;">📞 Your Phone Number</label>
@@ -1303,16 +1515,17 @@ input:checked+.slider::before{transform:translateX(18px);}
     </div>
     <div style="margin-bottom:12px;">
       <label style="font-size:0.67rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;display:block;margin-bottom:4px;">💳 Payment Method</label>
-      <div class="pay-row">
+      <div class="pay-row" style="grid-template-columns:repeat(4,1fr);">
         <div class="pay-opt active" id="fpay-cash" onclick="selFoodPay('cash',this)"><span class="pi">💵</span>Cash</div>
+        <div class="pay-opt" id="fpay-wallet" onclick="selFoodPay('wallet',this)"><span class="pi">👛</span>Wallet</div>
         <div class="pay-opt" id="fpay-transfer" onclick="selFoodPay('transfer',this)"><span class="pi">📲</span>Transfer</div>
         <div class="pay-opt" id="fpay-card" onclick="selFoodPay('card',this)"><span class="pi">💳</span>Card</div>
       </div>
       <div id="food-pay-account" style="display:none;margin-top:8px;background:rgba(79,158,255,0.08);border:1px solid rgba(79,158,255,0.25);border-radius:9px;padding:10px 12px;font-size:0.78rem;line-height:1.7;">
-        📲 <strong style="color:var(--text);">Transfer to:</strong><br/>
-        <strong style="font-size:1rem;color:#4f9eff;">OPay: 6554690244</strong><br/>
-        <span style="color:var(--muted);">Account Name: RideNaija</span><br/>
-        <span style="font-size:0.7rem;color:var(--muted);">After payment, send screenshot to <strong style="color:var(--text);">08120715812</strong> on WhatsApp. Your order will be confirmed immediately.</span>
+        💳 <strong style="color:var(--text);">Pay securely via Paystack</strong> — card, bank transfer, or USSD. Your order is placed automatically the moment payment is confirmed.
+      </div>
+      <div id="food-pay-wallet-note" style="display:none;margin-top:8px;background:rgba(0,184,101,0.08);border:1px solid rgba(0,184,101,0.25);border-radius:9px;padding:10px 12px;font-size:0.78rem;line-height:1.7;">
+        👛 <strong style="color:var(--text);">Wallet Balance:</strong> <span id="food-pay-wallet-bal">₦0.00</span> — the order total will be deducted instantly when you place the order.
       </div>
     </div>
     <div style="margin-bottom:10px;">
@@ -1320,7 +1533,7 @@ input:checked+.slider::before{transform:translateX(18px);}
       <input type="text" id="food-notes" placeholder="e.g. no pepper, extra sauce..." style="width:100%;background:var(--card2);border:1.5px solid var(--border);border-radius:9px;padding:10px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;box-sizing:border-box;"/>
     </div>
 
-    <button onclick="placeFoodOrder()" style="width:100%;padding:14px;background:linear-gradient(135deg,#f97316,#ea580c);border:none;border-radius:12px;font-family:'Syne',sans-serif;font-size:0.95rem;font-weight:800;color:#fff;cursor:pointer;margin-bottom:8px;">🍽️ Place Order</button>
+    <button id="food-submit-btn" onclick="placeFoodOrder()" style="width:100%;padding:14px;background:linear-gradient(135deg,#f97316,#ea580c);border:none;border-radius:12px;font-family:'Syne',sans-serif;font-size:0.95rem;font-weight:800;color:#fff;cursor:pointer;margin-bottom:8px;">🍽️ Place Order</button>
     <button class="ghost-btn" onclick="document.getElementById('food-checkout-overlay').classList.remove('open')">Cancel</button>
   </div>
 </div>
@@ -1643,7 +1856,148 @@ const PRICING = {
   tipper:    { base: 25000, perKm: 1000, label: 'Tipper rate' },
   trailer:   { base: 80000, perKm: 2500, label: 'Trailer rate' },
   flatbed:   { base: 60000, perKm: 2000, label: 'Flatbed rate' },
+  // Shared rate for food/market small-package delivery — a keke/okada-scale
+  // job, not a full Goods vehicle. Adjustable here any time.
+  // Kept for reference/back-compat — actual delivery fee now comes from
+  // DELIVERY_ZONES below, which matches the real printed pricing flyer.
+  delivery:  { base: 300,   perKm: 100,  label: 'Delivery rate' },
 };
+
+// ══════════════════════════════════════════
+// DELIVERY ZONE PRICING — matches your printed flyer exactly (Short
+// Distance/Same Zone/Across Zone/Cross-Zone). Shared by Delivery, Food, and
+// Market, since the flyer explicitly covers all three. Real geocoded
+// distance decides which band applies; the price itself is always one of
+// these four flat fees, never a raw per-km calculation, since that's what
+// you're actually advertising to customers.
+// Adjust the numbers here any time prices change — nothing else needs to
+// change when they do.
+// ══════════════════════════════════════════
+const DELIVERY_ZONES = [
+  { maxKm: 2,   fee: 1000, label: 'Short Distance' },
+  { maxKm: 5,   fee: 1500, label: 'Same Zone' },
+  { maxKm: 10,  fee: 2000, label: 'Across / Neighbouring Zone' },
+  { maxKm: Infinity, fee: 2500, label: 'Longer / Cross-Zone' },
+];
+
+function getZoneDeliveryFee(km){
+  if(km === null || km === undefined){
+    // No real distance yet — show the advertised minimum until it resolves
+    return { fee: DELIVERY_ZONES[0].fee, label: DELIVERY_ZONES[0].label };
+  }
+  for(var i=0; i<DELIVERY_ZONES.length; i++){
+    if(km <= DELIVERY_ZONES[i].maxKm) return { fee: DELIVERY_ZONES[i].fee, label: DELIVERY_ZONES[i].label };
+  }
+  return { fee: DELIVERY_ZONES[DELIVERY_ZONES.length-1].fee, label: DELIVERY_ZONES[DELIVERY_ZONES.length-1].label };
+}
+
+// Checks ONLY the admin's own manually-defined route pairs (the Area
+// Distance Table) — the owner's verified real-world knowledge of a route,
+// entered by hand. Kept separate from detectZone()'s full fallback chain
+// so it can be checked first, ahead of geocoding, not just as a last resort.
+function getAdminPairZone(pickupText, destText){
+  var p = (pickupText||'').toLowerCase();
+  var d = (destText||'').toLowerCase();
+  var pairs = JSON.parse(localStorage.getItem('rn_area_pairs') || '[]');
+  for(var i=0; i<pairs.length; i++){
+    var a = (pairs[i].from||'').toLowerCase();
+    var b = (pairs[i].to||'').toLowerCase();
+    if(!a || !b) continue;
+    if((p.includes(a) && d.includes(b)) || (p.includes(b) && d.includes(a))) return pairs[i].zone || null;
+  }
+  return null;
+}
+
+// Smart delivery fee resolver. Priority order matters here:
+//   1. Admin's own defined route pair, if one matches — this is the owner's
+//      verified real-world knowledge and should win even over a "successful"
+//      geocode, since free geocoding can still pin an informal Nigerian
+//      address to the wrong spot even when it returns coordinates.
+//   2. Real geocoded distance, if the admin hasn't defined this route.
+//   3. The same text-based zone detector used for ride/goods pricing
+//      (known cross-town pairs, then text heuristics) if geocoding fails too.
+// This function never silently falls back to the cheapest tier.
+function getZoneDeliveryFeeSmart(km, pickupText, destText){
+  var adminZone = getAdminPairZone(pickupText, destText);
+  if(adminZone){
+    var zoneToTier = { same:0, short:1, medium:2, long:3, crosstown:3 };
+    var aIdx = zoneToTier[adminZone] !== undefined ? zoneToTier[adminZone] : 1;
+    return { fee: DELIVERY_ZONES[aIdx].fee, label: DELIVERY_ZONES[aIdx].label + ' (your route)' };
+  }
+  if(km !== null && km !== undefined) return getZoneDeliveryFee(km);
+  var zone = (typeof detectZone === 'function') ? detectZone(pickupText||'', destText||'') : 'short';
+  var zoneToTier = { same:0, short:1, medium:2, long:3, crosstown:3 };
+  var idx = zoneToTier[zone] !== undefined ? zoneToTier[zone] : 1;
+  return { fee: DELIVERY_ZONES[idx].fee, label: DELIVERY_ZONES[idx].label + ' (estimated)' };
+}
+
+// ══════════════════════════════════════════
+// REAL DISTANCE ENGINE — replaces the old character-count "estimate" with
+// actual geography. Uses Nominatim (OpenStreetMap's free geocoding) — no
+// API key, no billing account, nothing to sign up for. Requests are
+// debounced by callers (never fired on every keystroke) to stay well
+// within Nominatim's usage policy, and results are cached in memory so the
+// same address text is never geocoded twice in one session.
+// ══════════════════════════════════════════
+const _geocodeCache = {};
+
+function haversineKm(lat1, lon1, lat2, lon2){
+  const R = 6371;
+  const dLat = (lat2-lat1) * Math.PI/180;
+  const dLon = (lon2-lon1) * Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function geocodeAddress(text){
+  const key = (text||'').trim().toLowerCase();
+  if(!key || key.length < 3) return Promise.resolve(null);
+  if(_geocodeCache[key] !== undefined) return Promise.resolve(_geocodeCache[key]);
+  const query = encodeURIComponent(text + ', Nigeria');
+  return fetch('https://nominatim.openstreetmap.org/search?format=json&q='+query+'&countrycodes=ng&limit=1')
+    .then(function(r){ return r.json(); })
+    .then(function(results){
+      const point = (results && results[0]) ? { lat: parseFloat(results[0].lat), lon: parseFloat(results[0].lon) } : null;
+      _geocodeCache[key] = point;
+      return point;
+    })
+    .catch(function(){ return null; });
+}
+
+// Resolves to a km number, or null if either address couldn't be geocoded
+// (caller should fall back to a heuristic/default in that case — this
+// should never block a booking from being made).
+function getRealDistanceKm(pickupText, destText){
+  return Promise.all([geocodeAddress(pickupText), geocodeAddress(destText)]).then(function(points){
+    const a = points[0], b = points[1];
+    if(!a || !b) return null;
+    const km = haversineKm(a.lat, a.lon, b.lat, b.lon);
+    return Math.round(km * 10) / 10;
+  });
+}
+
+// ══════════════════════════════════════════
+// SEQUENTIAL TRACKING ID — RN-YYYYMMDD-001, resets to 001 each new day.
+// Uses a Firebase transaction so two customers booking at the same instant
+// can never collide on the same number — Firebase resolves the race
+// atomically. Falls back to a still-valid (if less clean) id if the
+// transaction ever fails, so this never blocks a booking.
+// ══════════════════════════════════════════
+function generateTrackingId(){
+  const now = new Date();
+  const dateStr = now.getFullYear() + String(now.getMonth()+1).padStart(2,'0') + String(now.getDate()).padStart(2,'0');
+  return new Promise(function(resolve){
+    if(!window.firebaseDB){ resolve('RN-'+dateStr+'-'+String(Date.now()).slice(-3)); return; }
+    const counterRef = window.firebaseDB.ref('counters/deliveries/'+dateStr);
+    counterRef.transaction(function(current){ return (current||0) + 1; })
+      .then(function(result){
+        const seq = (result && result.snapshot && result.snapshot.val()) || 1;
+        resolve('RN-'+dateStr+'-'+String(seq).padStart(3,'0'));
+      })
+      .catch(function(){ resolve('RN-'+dateStr+'-'+String(Date.now()).slice(-3)); });
+  });
+}
+
 
 // STATE PRICE MULTIPLIERS
 // Each state has a multiplier relative to Niger/Suleja baseline (1.0)
@@ -1700,7 +2054,7 @@ const RIDER_COMMISSION = (_cs.riderCut||90) / 100;
 // ══════════════════════════════════════════
 // STATE
 // ══════════════════════════════════════════
-let svcType='okada', payMeth='cash', curFare=0, topupAmt=1000;
+let svcType='delivery', payMeth='cash', curFare=0, topupAmt=1000;
 let selGoodsData={type:'okada',name:'',price:0};
 let currentRiderPhone = '';
 
@@ -1715,6 +2069,12 @@ window.addEventListener('load',()=>{
   // Hide taxi tab until user selects FCT/Lagos
   const taxiTab=document.querySelector('.svc-tab[onclick*="\'taxi\'"]');
   if(taxiTab) taxiTab.style.display='none';
+
+  // RIDE_LOCK: Delivery is now the default tab. Run the same section-toggle
+  // logic a real tab click would, so the Delivery content area is actually
+  // visible on load, not just its tab button.
+  const deliveryTab = document.querySelector('.svc-tab.active[onclick*="\'delivery\'"]');
+  if(deliveryTab) selSvc(deliveryTab, 'delivery');
 
   // ── PAYSTACK PAYMENT RECOVERY ──
   // If Chrome refreshed during/after payment, show recovery banner
@@ -1771,8 +2131,26 @@ function recoverBooking(){
   localStorage.removeItem('rn_pending_payment');
   const b = document.getElementById('pay-recovery-banner');
   if(b) b.remove();
-  const rider = (pending.rider && pending.rider.name) ? pending.rider : null;
   const recoveryRef = 'RN-RECOVERY-'+Date.now();
+  const orderType = pending.orderType || 'ride'; // old saved intents had no orderType — treat as ride
+
+  if(orderType === 'delivery'){
+    finalizeCustomerDelivery(pending.payload, recoveryRef, null);
+    showToast('Booking confirmed and recorded!');
+    return;
+  }
+  if(orderType === 'market'){
+    finalizeMarketOrder(pending.payload, recoveryRef);
+    showToast('Order confirmed and recorded!');
+    return;
+  }
+  if(orderType === 'food'){
+    finalizeFoodOrder(pending.payload, recoveryRef);
+    showToast('Order confirmed and recorded!');
+    return;
+  }
+
+  const rider = (pending.rider && pending.rider.name) ? pending.rider : null;
   // Restore svcType and selGoodsData so completeBooking works
   svcType = pending.svcType || 'okada';
   if(pending.goodsType) selGoodsData = {name: pending.goodsType};
@@ -1978,7 +2356,7 @@ function renderDeliveryLogInApp(bookings){
   if(!summaryEl || !listEl) return;
 
   const delivered = bookings.filter(function(b){
-    return b.source==='parcel_intake' && (b.rideStatus==='completed'||b.rideStatus==='delivered');
+    return (b.source==='parcel_intake' || b.source==='delivery_request') && (b.rideStatus==='completed'||b.rideStatus==='delivered');
   }).sort(function(a,b){ return new Date(b.time||0) - new Date(a.time||0); });
 
   const bonusRate = (window.FB_LOGISTICS_SETTINGS && window.FB_LOGISTICS_SETTINGS.parcelBonusPerDelivery) || 200;
@@ -1993,6 +2371,7 @@ function renderDeliveryLogInApp(bookings){
     + '<div><div style="font-size:0.62rem;color:var(--muted);">This week</div><div style="font-family:\'Syne\',sans-serif;font-size:1.3rem;font-weight:800;color:#4f9eff;">' + thisWeek.length + ' delivered</div></div>'
     + '<div style="text-align:right;"><div style="font-size:0.62rem;color:var(--muted);">Estimated bonus</div><div style="font-family:\'Syne\',sans-serif;font-size:1.3rem;font-weight:800;color:var(--green);">₦' + weekEstimate.toLocaleString() + '</div></div>'
     + '</div>'
+    + '<div style="text-align:center;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);"><span style="font-size:0.62rem;color:var(--muted);">All-time total: </span><span style="font-family:\'Syne\',sans-serif;font-weight:800;color:var(--text);">' + delivered.length + ' deliveries</span></div>'
     + '<div style="font-size:0.62rem;color:var(--muted);margin-top:8px;text-align:center;">₦' + bonusRate.toLocaleString() + ' per delivery · estimate for your reference — confirm actual payout with your owner</div>';
 
   if(!delivered.length){
@@ -2125,6 +2504,8 @@ function loadRiderBookingsInApp(riderName, normalised){
 function riderBookingCard(b, isHistory=false){
   const isCash=b.payMethod==='Cash'||b.payMethod==='cash';
   const isFoodMkt=b.source==='food_order'||b.source==='market_order'||b.type==='market';
+  const isDeliveryType = b.source==='delivery_partner'||b.source==='market_order'||b.source==='food_order'||b.source==='parcel_intake'||b.source==='delivery_request'||b.type==='market';
+  const dStage = b.deliveryStage||'order_placed';
   const _cr2 = window.currentRider || {};
   const isCompR = _cr2.riderType==='company'||!!_cr2.companyRiderKey;
   let collect;
@@ -2151,7 +2532,7 @@ function riderBookingCard(b, isHistory=false){
     +'<div style="font-size:0.58rem;color:var(--muted);text-align:center;margin-top:3px;">🟢 You · 🔵 Customer — both shown live on map</div>'
     +'<div style="display:flex;gap:7px;margin-top:8px;">'
     +'<button onclick="resumeRpTracking(\''+bId+'\',\''+((b.phone||'').replace(/'/g,''))+'\')" style="flex:1;padding:10px;background:rgba(79,158,255,0.15);border:1.5px solid #4f9eff;border-radius:9px;font-family:\'Syne\',sans-serif;font-weight:800;font-size:0.74rem;color:#4f9eff;cursor:pointer;">▶️ Resume Tracking</button>'
-    +'<button onclick="stopRpTracking(\''+bId+'\')" style="flex:1;padding:10px;background:var(--green);border:none;border-radius:9px;font-family:\'Syne\',sans-serif;font-weight:800;font-size:0.74rem;color:#000;cursor:pointer;">✅ Complete Ride</button>'
+    +'<button onclick="stopRpTracking(\''+bId+'\','+isDeliveryType+')" style="flex:1;padding:10px;background:var(--green);border:none;border-radius:9px;font-family:\'Syne\',sans-serif;font-weight:800;font-size:0.74rem;color:#000;cursor:pointer;">'+(isDeliveryType?'✅ Mark as Delivered':'✅ Complete Ride')+'</button>'
     +'</div>'
     +'</div>'
     // If shown in history but ride is NOT yet completed — offer Resume Tracking button
@@ -2162,6 +2543,14 @@ function riderBookingCard(b, isHistory=false){
     +'<button onclick="resumeRpTracking(\''+bId+'\',\''+((b.phone||'').replace(/'/g,''))+'\')" style="width:100%;padding:10px;background:rgba(79,158,255,0.15);border:1.5px solid #4f9eff;border-radius:9px;font-family:\'Syne\',sans-serif;font-weight:800;font-size:0.78rem;color:#4f9eff;cursor:pointer;">▶️ Resume Tracking & Complete Ride</button>'
     +'</div>'
     :'';
+  const deliveryProgressHtml = (!isHistory && !isDone && isDeliveryType) ? `
+    <div style="margin-top:8px;flex-direction:column;gap:6px;background:rgba(79,158,255,0.06);border:1px solid rgba(79,158,255,0.2);border-radius:9px;padding:10px;">
+      <div style="font-size:0.62rem;color:#4f9eff;font-weight:700;text-align:center;margin-bottom:6px;">📦 Delivery Progress: ${dStage==='in_transit'?'🚚 In Transit':dStage==='picked_up'?'📦 Picked Up':'🏷️ Order Placed'}</div>
+      <div style="display:flex;gap:6px;">
+        <button onclick="updateDeliveryStageInApp('${bId}','picked_up')" style="flex:1;padding:8px;border-radius:7px;border:none;font-size:0.68rem;font-weight:700;cursor:pointer;background:${dStage==='picked_up'||dStage==='in_transit'?'var(--green)':'rgba(255,255,255,0.08)'};color:${dStage==='picked_up'||dStage==='in_transit'?'#000':'var(--muted)'};">📦 Picked Up</button>
+        <button onclick="updateDeliveryStageInApp('${bId}','in_transit')" style="flex:1;padding:8px;border-radius:7px;border:none;font-size:0.68rem;font-weight:700;cursor:pointer;background:${dStage==='in_transit'?'var(--green)':'rgba(255,255,255,0.08)'};color:${dStage==='in_transit'?'#000':'var(--muted)'};">🚚 In Transit</button>
+      </div>
+    </div>` : '';
   return `<div style="background:var(--card);border:1.5px solid ${isDone?'var(--border)':'rgba(0,184,101,0.3)'};border-radius:12px;padding:12px;margin-bottom:8px;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
       <span style="font-family:'Syne',sans-serif;font-size:0.82rem;font-weight:700;">${b.pickup||'—'} → ${b.destination||'—'}</span>
@@ -2179,6 +2568,7 @@ function riderBookingCard(b, isHistory=false){
       <a href="tel:${b.phone}" style="flex:1;padding:8px;background:var(--green);border-radius:8px;font-family:'Syne',sans-serif;font-weight:700;font-size:0.72rem;color:#000;text-align:center;text-decoration:none;">📞 Call</a>
       <a href="https://wa.me/${(b.phone||'').replace(/^0/,'234')}?text=${encodeURIComponent('Hello! I am your RideNaija rider. I am on my way! 🏍️')}" target="_blank" style="flex:1;padding:8px;background:rgba(0,184,101,0.12);border:1px solid var(--green);border-radius:8px;font-family:'Syne',sans-serif;font-weight:700;font-size:0.72rem;color:var(--green);text-align:center;text-decoration:none;">💬 WhatsApp</a>
     </div>`:''}
+    ${deliveryProgressHtml}
     ${trackSection}
   </div>`;
 }
@@ -2389,8 +2779,8 @@ function startRpTracking(bookingId, customerPhone){
   );
 }
 
-function stopRpTracking(bookingId){
-  if(!confirm('Confirm customer has arrived and ride is complete?')) return;
+function stopRpTracking(bookingId, isDelivery){
+  if(!confirm(isDelivery ? 'Confirm this parcel/order has been delivered?' : 'Confirm customer has arrived and ride is complete?')) return;
   if(_rpRiderWatcher!==null){ navigator.geolocation.clearWatch(_rpRiderWatcher); _rpRiderWatcher=null; }
   _rpActiveTrackingId=null; _rpReleaseWakeLock(); _rpClearTrackingState();
   const _db2=window.firebaseDB;
@@ -2422,6 +2812,19 @@ function stopRpTracking(bookingId){
   if(mapDiv) mapDiv.innerHTML='<div style="color:var(--muted);font-size:0.72rem;padding:8px;text-align:center;">✅ Ride completed</div>';
   showToast('✅ Ride completed! Well done.');
   setTimeout(()=>{ if(window._riderBksListener) loadRiderBookingsInApp(currentRider.name||'', window._rpNormalised||''); },1200);
+}
+
+// Advances a delivery-type booking through its tracking stages — same
+// pattern as rider-portal.html's updateDeliveryStage(). Doesn't touch
+// settlement/payment logic at all, purely for the customer tracking page.
+function updateDeliveryStageInApp(bookingId, stage){
+  if(!bookingId || !window.firebaseDB) return;
+  window.firebaseDB.ref('bookings/'+bookingId).update({ deliveryStage: stage, deliveryStageUpdatedAt: new Date().toISOString() })
+    .then(function(){
+      showToast(stage==='picked_up' ? '📦 Marked as Picked Up' : '🚚 Marked as In Transit');
+      setTimeout(()=>{ if(window._riderBksListener) loadRiderBookingsInApp(currentRider.name||'', window._rpNormalised||''); },600);
+    })
+    .catch(function(){});
 }
 
 // Resume tracking after app refresh — rebuilds the tracking card and restarts GPS
@@ -3318,6 +3721,8 @@ function selSvc(btn,type){
   const goodsDescSec = document.getElementById('goods-desc-section');
   const royalSec = document.getElementById('royal-ride-section');
   const mktSec = document.getElementById('market-section');
+  const delSec = document.getElementById('delivery-section');
+  if(delSec) delSec.style.display = (type==='delivery') ? 'block' : 'none';
   if(goodsSec) goodsSec.classList.toggle('show', type==='goods');
   if(goodsDescSec) goodsDescSec.classList.toggle('show', type==='goods');
   if(royalSec) royalSec.classList.toggle('show', type==='royal_ride');
@@ -3340,16 +3745,16 @@ function selSvc(btn,type){
   const dedSec=document.getElementById('dedicated-section');
   if(dedSec) dedSec.style.display=(type==='dedicated')?'block':'none';
   // Hide normal pickup/dest/fare when dedicated is active
-  const isSpecial = type==='dedicated' || type==='market';
-  const normalBookingFields=['state-select-group','pickup','dest','price-breakdown','pay-section','bk-submit-btn'];
+  const isSpecial = type==='dedicated' || type==='market' || type==='delivery';
+  const normalBookingFields=['state-select-group','pickup','dest','price-breakdown','bk-phone-group','bk-pay-group','bk-fare-row','bk-btn'];
   normalBookingFields.forEach(id=>{
-    const el=document.getElementById(id)||document.querySelector('[id="'+id+'"]');
+    const el=document.getElementById(id);
     if(el) el.closest('.form-group')?el.closest('.form-group').style.display=(isSpecial?'none':''):el.style.display=(isSpecial?'none':'');
   });
-  const titles={okada:'Book an Okada Ride',keke:'Book a Keke Napep',taxi:'Book a Taxi',royal_ride:'👑 Royal Ride',goods:'Book Goods Transport',dedicated:'📅 Dedicated Rider Subscription',market:'🛒 RideNaija Market'};
+  const titles={okada:'Book an Okada Ride',keke:'Book a Keke Napep',taxi:'Book a Taxi',royal_ride:'👑 Royal Ride',goods:'Book Goods Transport',dedicated:'📅 Dedicated Rider Subscription',market:'🛒 RideNaija Market',delivery:'📦 Book a Delivery'};
   document.getElementById('bk-head-title').textContent=titles[type]||'Book a Ride';
   if(!showGoods&&type!=='taxi'){selGoodsData={type:'okada',name:'',price:0};}
-  if(type!=='dedicated') calcFare();
+  if(type!=='dedicated'&&type!=='delivery') calcFare();
 }
 
 function selGoods(el,type,name,basePrice){
@@ -3739,6 +4144,9 @@ const ZONE_LABELS = {
   crosstown: 'Cross town (15 km+)',
 };
 
+let _fareDebounceTimer = null;
+let _fareCalcToken = 0; // guards against a slow, stale geocode response overwriting a newer one
+
 function calcFare(){
   const p=document.getElementById('pickup').value.trim();
   const d=document.getElementById('dest').value.trim();
@@ -3763,13 +4171,39 @@ function calcFare(){
   let baseFare, distCharge, zoneLabel, rateLabel, pricing;
 
   if(isGoods){
-    // Goods: use base + per-km estimate (text length heuristic)
+    // Show an immediate rough estimate right away so the UI never feels
+    // frozen, then refine it with the real geocoded distance a moment
+    // later once the person pauses typing.
     pricing = PRICING[vehicleKey] || PRICING.pickup;
-    const estimatedKm = Math.max(2, Math.min(80, Math.floor((p.length+d.length)*0.9)));
+    const roughKm = Math.max(2, Math.min(80, Math.floor((p.length+d.length)*0.9)));
     baseFare = Math.round(pricing.base * mult);
-    distCharge = Math.round(estimatedKm * pricing.perKm * mult);
-    zoneLabel = '~'+estimatedKm+' km estimate';
-    rateLabel = '₦'+pricing.perKm+'/km × ~'+estimatedKm+'km';
+    distCharge = Math.round(roughKm * pricing.perKm * mult);
+    zoneLabel = 'Estimating real distance…';
+    rateLabel = '₦'+pricing.perKm+'/km × ~'+roughKm+'km (rough estimate)';
+
+    clearTimeout(_fareDebounceTimer);
+    const myToken = ++_fareCalcToken;
+    _fareDebounceTimer = setTimeout(function(){
+      getRealDistanceKm(p, d).then(function(km){
+        if(myToken !== _fareCalcToken) return; // a newer keystroke has since superseded this
+        if(km === null) {
+          // Geocoding failed (unrecognized address, offline, etc) — keep the
+          // rough estimate already shown rather than blocking the booking.
+          const zEl = document.getElementById('pb-svc-label');
+          if(zEl) zEl.textContent = '~'+roughKm+' km estimate (address not recognized — using rough estimate)';
+          return;
+        }
+        const realBase = Math.round(pricing.base * mult);
+        const realDist = Math.round(km * pricing.perKm * mult);
+        curFare = realBase + realDist;
+        document.getElementById('pb-base').textContent = '₦'+realBase.toLocaleString();
+        document.getElementById('pb-dist').textContent = '₦'+realDist.toLocaleString();
+        document.getElementById('pb-svc-label').textContent = km+' km (actual road-map distance)';
+        document.getElementById('pb-rate').textContent = '₦'+pricing.perKm+'/km × '+km+'km';
+        document.getElementById('pb-total').textContent = '₦'+curFare.toLocaleString();
+        document.getElementById('fare-disp').textContent = '₦'+curFare.toLocaleString();
+      });
+    }, 800);
   } else {
     // Passenger (Okada / Keke / Taxi): use smart zone detection
     const zone = detectZone(p, d);
@@ -4746,38 +5180,69 @@ function selMarketPay(method){
   mktPayMethod = method;
   const cardBtn = document.getElementById('mkt-pay-card');
   const cashBtn = document.getElementById('mkt-pay-cash');
+  const walletBtn = document.getElementById('mkt-pay-wallet');
   const note    = document.getElementById('mkt-pay-note');
+  const activeStyle = 'padding:10px 4px;border:1.5px solid var(--green);background:var(--gl);border-radius:10px;font-family:\'Syne\',sans-serif;font-weight:700;font-size:0.7rem;color:var(--green);cursor:pointer;';
+  const inactiveStyle = 'padding:10px 4px;border:1.5px solid var(--border);background:transparent;border-radius:10px;font-family:\'Syne\',sans-serif;font-weight:700;font-size:0.7rem;color:var(--muted);cursor:pointer;';
+  cardBtn.setAttribute('style', method==='Card' ? activeStyle : inactiveStyle);
+  cashBtn.setAttribute('style', method==='Cash' ? activeStyle : inactiveStyle);
+  walletBtn.setAttribute('style', method==='Wallet' ? activeStyle : inactiveStyle);
   if(method==='Card'){
-    cardBtn.style.borderColor='var(--green)';cardBtn.style.background='var(--gl)';cardBtn.style.color='var(--green)';
-    cashBtn.style.borderColor='var(--border)';cashBtn.style.background='transparent';cashBtn.style.color='var(--muted)';
-    note.innerHTML = '💳 <strong>Pay Now (Transfer):</strong> Transfer ₦<span id="mkt-note-total">—</span> to our OPay account: <strong>6554690244 (RideNaija)</strong>. Send screenshot to <strong>08120715812</strong> on WhatsApp. Your order starts immediately after confirmation.';
+    note.innerHTML = '💳 <strong>Pay Now:</strong> Pay securely via Paystack — card, bank transfer, or USSD. Your order is placed automatically the moment payment is confirmed.';
     calcMarketTotal();
+  } else if(method==='Wallet'){
+    note.innerHTML = '👛 <strong>Wallet Balance:</strong> ₦'+getWallet().toLocaleString()+' — the full order total will be deducted instantly when you place the order.';
   } else {
-    cashBtn.style.borderColor='var(--green)';cashBtn.style.background='var(--gl)';cashBtn.style.color='var(--green)';
-    cardBtn.style.borderColor='var(--border)';cardBtn.style.background='transparent';cardBtn.style.color='var(--muted)';
     note.innerHTML = '💵 <strong>Pay on Delivery:</strong> Pay the rider cash when your order arrives. Agent still sends receipt photo before leaving market.';
   }
 }
 
+let _mktFareDebounceTimer = null;
+let _mktFareToken = 0;
+window._mktDeliveryFeeResolved = null; // real distance-based fee once known; null means "still using flat fallback"
+
 function calcMarketTotal(){
   const _mktF = getMktFees();
   const MKT_SHOPPING_FEE = _mktF.shopping;
-  const MKT_DELIVERY_FEE = _mktF.delivery;
   const budget = parseInt(document.getElementById('mkt-budget').value||'0');
   const phone  = (document.getElementById('mkt-phone').value||'').trim();
+  const market = (document.getElementById('mkt-market').value||'').trim();
+  const addr   = (document.getElementById('mkt-delivery-addr').value||'').trim();
   const summary = document.getElementById('mkt-cost-summary');
 
+  // Show the smart zone-based guess immediately (uses admin-defined route
+  // pairs / known town pairs / text heuristics — instant, no network call)
+  // rather than the flat advertised minimum while we wait on geocoding.
+  const deliveryFee = window._mktDeliveryFeeResolved !== null ? window._mktDeliveryFeeResolved : getZoneDeliveryFeeSmart(null, market, addr).fee;
+
   if(budget >= 500 && phone.length >= 10){
-    const total = budget + MKT_SHOPPING_FEE + MKT_DELIVERY_FEE;
+    const total = budget + MKT_SHOPPING_FEE + deliveryFee;
     document.getElementById('mkt-sum-budget').textContent   = '₦'+budget.toLocaleString();
     document.getElementById('mkt-sum-shop-fee').textContent = '₦'+MKT_SHOPPING_FEE.toLocaleString();
-    document.getElementById('mkt-sum-del-fee').textContent  = '₦'+MKT_DELIVERY_FEE.toLocaleString();
+    document.getElementById('mkt-sum-del-fee').textContent  = '₦'+deliveryFee.toLocaleString() + (window._mktDeliveryFeeResolved!==null ? '' : ' (est.)');
     document.getElementById('mkt-sum-total').textContent    = '₦'+total.toLocaleString();
     const noteTotal = document.getElementById('mkt-note-total');
     if(noteTotal) noteTotal.textContent = total.toLocaleString();
     summary.style.display = 'block';
   } else {
     summary.style.display = 'none';
+  }
+
+  // Debounced real-distance refinement, same pattern as Goods
+  if(market.length >= 3 && addr.length >= 3){
+    clearTimeout(_mktFareDebounceTimer);
+    const myToken = ++_mktFareToken;
+    _mktFareDebounceTimer = setTimeout(function(){
+      getRealDistanceKm(market, addr).then(function(km){
+        if(myToken !== _mktFareToken) return;
+        // Resolve to a real fee either way — smart zone fallback instead of
+        // silently keeping the cheapest tier when geocoding fails.
+        window._mktDeliveryFeeResolved = getZoneDeliveryFeeSmart(km, market, addr).fee;
+        calcMarketTotal(); // re-render with the real fee now known
+      });
+    }, 800);
+  } else {
+    window._mktDeliveryFeeResolved = null;
   }
 }
 
@@ -4789,7 +5254,7 @@ function submitMarketOrder(){
   const phone   = (document.getElementById('mkt-phone').value||'').trim();
   const _mktF   = getMktFees();
   const MKT_SHOPPING_FEE = _mktF.shopping;
-  const MKT_DELIVERY_FEE = _mktF.delivery;
+  const MKT_DELIVERY_FEE = window._mktDeliveryFeeResolved !== null ? window._mktDeliveryFeeResolved : getZoneDeliveryFeeSmart(null, market, addr).fee;
 
   // Validate
   if(!market)  { showToast('⚠️ Enter the market name'); return; }
@@ -4801,10 +5266,99 @@ function submitMarketOrder(){
   const btn = document.getElementById('mkt-submit-btn');
   if(btn.dataset.submitting==='1') return;
   btn.dataset.submitting = '1';
-  btn.textContent = '⏳ Placing order...';
   btn.disabled = true;
 
   const total = budget + MKT_SHOPPING_FEE + MKT_DELIVERY_FEE;
+  const dedupKey = 'rn_mkt_' + phone.slice(-6) + '_' + String(budget);
+  const lastMkt  = parseInt(sessionStorage.getItem(dedupKey)||'0');
+  if(Date.now() - lastMkt < 60000){
+    showToast('⚠️ Order already placed. Please wait.');
+    btn.dataset.submitting=''; btn.disabled=false;
+    return;
+  }
+
+  const details = { market, items, budget, addr, phone,
+    shoppingFee: MKT_SHOPPING_FEE, deliveryFee: MKT_DELIVERY_FEE, total, dedupKey };
+
+  if(mktPayMethod === 'Card'){
+    payMarketWithPaystack(details, btn);
+  } else if(mktPayMethod === 'Wallet'){
+    const bal = getWallet();
+    if(bal < total){
+      showToast('⚠️ Wallet too low. Top up first.');
+      btn.dataset.submitting=''; btn.disabled=false;
+      goPage('wallet');
+      return;
+    }
+    localStorage.setItem('rn_wallet', (bal-total).toString());
+    addTxn('Market order — '+market, total, 'debit');
+    btn.textContent = '⏳ Placing order...';
+    finalizeMarketOrder(details, 'WALLET-'+Date.now(), btn);
+  } else {
+    btn.textContent = '⏳ Placing order...';
+    finalizeMarketOrder(details, null, btn);
+  }
+}
+
+// Paystack popup for Market orders — same pattern as Delivery.
+function payMarketWithPaystack(details, btn){
+  if(typeof PaystackPop === 'undefined'){
+    showToast('⚠️ Payment service unavailable — please try Pay on Delivery instead');
+    btn.dataset.submitting=''; btn.disabled=false;
+    return;
+  }
+  btn.textContent = 'Processing...'; btn.style.opacity='0.7';
+
+  var email = details.phone.replace(/^0/,'234')+'@ridenaija.ng';
+  var ref = 'RNMKT-'+Date.now();
+
+  localStorage.setItem('rn_pending_payment', JSON.stringify({
+    orderType:'market', ref:ref, timestamp:Date.now(),
+    pickup:details.market, dest:details.addr, fare:details.total,
+    payload: details
+  }));
+
+  var handler = PaystackPop.setup({
+    key:'pk_live_f954352f9790a0c362e7730333b99e12f141958f',
+    email: email,
+    amount: details.total*100,
+    currency:'NGN',
+    ref: ref,
+    phone: details.phone,
+    metadata:{ type:'market', market:details.market, destination:details.addr, phone:details.phone },
+    callback(res){
+      localStorage.removeItem('rn_pending_payment');
+      btn.textContent = '⏳ Placing order...';
+      finalizeMarketOrder(details, res.reference, btn);
+    },
+    onClose(){
+      btn.textContent='🛒 Place Market Order'; btn.style.opacity='1';
+      btn.dataset.submitting=''; btn.disabled=false;
+      localStorage.removeItem('rn_pending_payment');
+      showToast('Payment cancelled');
+    }
+  });
+  handler.openIframe();
+}
+
+function finalizeMarketOrder(details, paystackRef, btn){
+  const market=details.market, items=details.items, budget=details.budget, addr=details.addr,
+        phone=details.phone, MKT_SHOPPING_FEE=details.shoppingFee, MKT_DELIVERY_FEE=details.deliveryFee,
+        total=details.total, dedupKey=details.dedupKey;
+
+  if(paystackRef){
+    const savedRefs = JSON.parse(localStorage.getItem('rn_saved_refs')||'[]');
+    if(savedRefs.includes(paystackRef)){
+      console.warn('[RideNaija] Duplicate market order blocked — ref already saved:', paystackRef);
+      return;
+    }
+    savedRefs.push(paystackRef);
+    if(savedRefs.length > 30) savedRefs.shift();
+    localStorage.setItem('rn_saved_refs', JSON.stringify(savedRefs));
+  }
+
+  sessionStorage.setItem(dedupKey, String(Date.now()));
+
   const prof  = getProfile();
   const orderId = 'MKT_' + new Date().toISOString().slice(0,16).replace(/[^0-9]/g,'') + '_' + phone.slice(-4);
   const timeNow = new Date().toISOString();
@@ -4832,17 +5386,9 @@ function submitMarketOrder(){
     riderName: '', riderPhone: '',
     time: timeNow
   };
+  if(paystackRef) orderData.paystackRef = paystackRef;
 
   // Save to Firebase
-  const dedupKey = 'rn_mkt_' + phone.slice(-6) + '_' + String(budget);
-  const lastMkt  = parseInt(sessionStorage.getItem(dedupKey)||'0');
-  if(Date.now() - lastMkt < 60000){
-    showToast('⚠️ Order already placed. Please wait.');
-    btn.dataset.submitting=''; btn.disabled=false; btn.textContent='🛒 Place Market Order';
-    return;
-  }
-  sessionStorage.setItem(dedupKey, String(Date.now()));
-
   if(window.firebaseReady && window.firebaseDB){
     window.firebaseSet(window.firebaseRef(window.firebaseDB,'bookings/'+orderId), orderData);
     // Notify admin devices — a new market order needs a rider dispatched
@@ -4852,7 +5398,7 @@ function submitMarketOrder(){
       body: JSON.stringify({
         adminBroadcast: true,
         title: '🛒 New Market Order — Needs Rider',
-        body: market+' → '+addr+' · ₦'+total.toLocaleString(),
+        body: market+' → '+addr+' · ₦'+total.toLocaleString()+(paystackRef?' · Paid via Paystack':''),
         data: { link:'/admin.html', bookingId:orderId }
       })
     }).catch(function(){});
@@ -4873,28 +5419,15 @@ function submitMarketOrder(){
     '🛵 *Shopping fee:* ₦' + MKT_SHOPPING_FEE + '\n' +
     '🏍️ *Delivery fee:* ₦' + MKT_DELIVERY_FEE + '\n' +
     '💵 *Total:* ₦' + total.toLocaleString() + '\n' +
-    '💳 *Payment:* ' + mktPayMethod + '\n\n' +
+    '💳 *Payment:* ' + mktPayMethod + (paystackRef?' (paid — ref '+paystackRef+')':'') + '\n\n' +
     '📍 *Deliver to:* ' + addr + '\n' +
     '📞 *Customer:* ' + phone + '\n\n' +
     'Action: Go to market, buy items, send receipt photo to customer, then dispatch rider.';
 
   sendOwnerWhatsApp(ownerMsg);
 
-  // Success feedback + payment instruction for card
-  showToast('✅ Order placed! Tracking ID: ' + orderId);
-  if(mktPayMethod === 'Card'){
-    const transferMsg =
-      '💳 *RideNaija Market Order Payment*\n\n' +
-      '📦 Your order has been placed!\n' +
-      '💰 Amount to transfer: ₦' + total.toLocaleString() + '\n\n' +
-      '🏦 Pay to: OPay\n' +
-      '📱 Account: 6554690244\n' +
-      '👤 Name: RideNaija Mobility\n\n' +
-      'Send your payment screenshot to confirm. Your order starts immediately after. Thank you! 🇳🇬';
-    setTimeout(()=>{
-      sendOwnerWhatsApp(transferMsg);
-    }, 1500);
-  }
+  // Success feedback
+  showToast(paystackRef ? '✅ Payment received! Order placed — Tracking ID: ' + orderId : '✅ Order placed! Tracking ID: ' + orderId);
 
   // Reset form
   setTimeout(()=>{
@@ -4903,7 +5436,7 @@ function submitMarketOrder(){
     });
     document.querySelectorAll('.mkt-cat-btn').forEach(b=>b.classList.remove('active'));
     document.getElementById('mkt-cost-summary').style.display='none';
-    btn.dataset.submitting=''; btn.disabled=false; btn.textContent='🛒 Place Market Order';
+    if(btn){ btn.dataset.submitting=''; btn.disabled=false; btn.textContent='🛒 Place Market Order'; btn.style.opacity='1'; }
   }, 2000);
 }
 
@@ -4937,7 +5470,18 @@ function setFoodCategoryFilter(cat, btnEl){
     p.style.background = isActive ? 'var(--green)' : 'var(--card)';
     p.style.color = isActive ? '#000' : 'var(--text)';
   });
-  renderFoodTab();
+
+  var isMarkets = cat === 'Markets';
+  document.getElementById('food-rst-list').style.display = isMarkets ? 'none' : '';
+  document.getElementById('market-browse').style.display = isMarkets ? 'block' : 'none';
+  var emptyEl = document.getElementById('food-empty');
+  if(isMarkets){
+    if(emptyEl) emptyEl.style.display = 'none';
+    _marketBrowse = { level:'markets', market:null, line:null };
+    renderMarketsBrowse();
+  } else {
+    renderFoodTab();
+  }
 }
 
 function renderFoodTab(){
@@ -4960,37 +5504,287 @@ function renderFoodTab(){
   if(emptyEl) emptyEl.style.display='none';
 
   listEl.innerHTML = rsts.map(function(r){
-    var menu = r.menu ? Object.entries(r.menu) : [];
-    var menuHtml = menu.length ? menu.map(function(m){
-      var item = m[1]; var mKey = m[0];
-      var cartRst = foodCart[r.fbKey];
-      var existing = cartRst ? cartRst.items.find(function(i){ return i.mKey===mKey; }) : null;
-      var qty = existing ? existing.qty : 0;
-      var thumbHtml = item.photoUrl
-        ? '<img src="'+item.photoUrl+'" alt="" style="width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0;">'
-        : '<span class="fmi-emoji">'+(item.emoji||'🍽️')+'</span>';
-      return '<div class="food-menu-item">'
-        +'<div class="fmi-left">'+thumbHtml+'<span class="fmi-name">'+item.name+'</span></div>'
-        +'<span class="fmi-price">₦'+parseInt(item.price).toLocaleString()+'</span>'
-        +'<div class="fmi-qty">'
-        +'<button class="'+(qty>0?'active':'')+'" onclick="foodQty(\''+r.fbKey+'\',\''+mKey+'\',\''+item.name+'\','+item.price+',\''+(item.emoji||'🍽️')+'\',\''+(r.name||'')+'\',\''+(r.phone||'')+'\',\''+(r.location||'')+'\','+(r.deliveryFee||500)+',-1)">−</button>'
-        +'<span id="fqty-'+r.fbKey+'-'+mKey+'">'+(qty||0)+'</span>'
-        +'<button class="'+(qty>0?'active':'')+'" onclick="foodQty(\''+r.fbKey+'\',\''+mKey+'\',\''+item.name+'\','+item.price+',\''+(item.emoji||'🍽️')+'\',\''+(r.name||'')+'\',\''+(r.phone||'')+'\',\''+(r.location||'')+'\','+(r.deliveryFee||500)+',1)">+</button>'
-        +'</div>'
-        +'</div>';
-    }).join('') : '<div style="font-size:0.76rem;color:var(--muted);padding:8px 0;">Nothing listed yet</div>';
-
-    return '<div class="food-rst-card">'
-      +'<div class="food-rst-head">'
-      +'<div class="food-rst-emoji">'+(r.emoji||'🍽️')+'</div>'
-      +'<div class="food-rst-info"><div class="food-rst-name">'+r.name+'</div><div class="food-rst-loc">📍 '+r.location+'</div></div>'
-      +'<div class="food-rst-fee">🏍️ ₦'+(r.deliveryFee||500)+' delivery</div>'
+    var itemCount = r.menu ? Object.keys(r.menu).length : 0;
+    var bannerHtml = r.logoUrl
+      ? '<img src="'+r.logoUrl+'" alt="" style="width:100%;height:100%;object-fit:cover;">'
+      : '<span style="font-size:2.8rem;">'+(r.emoji||'🍽️')+'</span>';
+    return '<div class="food-rst-card" onclick="openVendorDetail(\''+r.fbKey+'\')" style="cursor:pointer;padding:0;overflow:hidden;">'
+      +'<div style="width:100%;height:160px;background:var(--card2);display:flex;align-items:center;justify-content:center;overflow:hidden;">'+bannerHtml+'</div>'
+      +'<div style="padding:12px;">'
+      +'<div class="food-rst-head" style="margin-bottom:0;">'
+      +'<div class="food-rst-info" style="flex:1;"><div class="food-rst-name">'+r.name+'</div><div class="food-rst-loc">📍 '+r.location+'</div></div>'
       +'</div>'
-      +'<div class="food-menu-list">'+menuHtml+'</div>'
+      +'<div style="font-size:0.68rem;color:var(--muted);margin-top:6px;">'+itemCount+' item'+(itemCount!==1?'s':'')+' · Tap to view menu →</div>'
+      +'</div>'
       +'</div>';
   }).join('');
 
   updateCartBar();
+}
+
+// ══════════════════════════════════════════
+// MARKETS BROWSE — Market → Line → Shop → Catalog. Walks the same
+// physical-market structure a customer would use in person. Reuses
+// foodCart/foodQty/checkout entirely unchanged (they only ever take plain
+// name/phone/location strings, never a restaurant-specific lookup), and
+// reuses the vendor-detail-overlay markup for the catalog view itself.
+// ══════════════════════════════════════════
+var _marketBrowse = { level:'markets', market:null, line:null };
+
+function renderMarketsBrowse(){
+  var shops = window.LIVE_SHOPS || [];
+  var listEl = document.getElementById('market-browse-list');
+  var crumbEl = document.getElementById('market-breadcrumb');
+  if(!listEl) return;
+  document.getElementById('market-search').value = '';
+
+  if(!shops.length){
+    crumbEl.style.display='none';
+    listEl.innerHTML = '<div class="empty-box"><div class="ico">🏪</div><p>No markets listed yet.<br/>Check back soon.</p></div>';
+    return;
+  }
+
+  if(_marketBrowse.level === 'markets'){
+    crumbEl.style.display='none';
+    var marketNames = Array.from(new Set(shops.map(function(s){ return s.marketName; }).filter(Boolean)));
+    listEl.innerHTML = marketNames.map(function(mName){
+      var count = shops.filter(function(s){ return s.marketName===mName; }).length;
+      return '<div class="food-rst-card" onclick="openMarketBrowse(\''+mName.replace(/'/g,"\\'")+'\')" style="cursor:pointer;padding:16px;display:flex;align-items:center;gap:12px;">'
+        +'<span style="font-size:2rem;">🏪</span>'
+        +'<div style="flex:1;"><div class="food-rst-name">'+mName+'</div><div class="food-rst-loc">'+count+' shop'+(count!==1?'s':'')+'</div></div>'
+        +'<span style="color:var(--muted);">›</span></div>';
+    }).join('');
+    return;
+  }
+
+  if(_marketBrowse.level === 'lines'){
+    crumbEl.style.display='block';
+    crumbEl.innerHTML = '<span style="color:var(--green);cursor:pointer;" onclick="backToMarkets()">🏪 Markets</span> › '+_marketBrowse.market;
+    var marketShops = shops.filter(function(s){ return s.marketName===_marketBrowse.market; });
+    var lineNames = Array.from(new Set(marketShops.map(function(s){ return s.lineName; }).filter(Boolean)));
+    listEl.innerHTML = lineNames.map(function(lName){
+      var count = marketShops.filter(function(s){ return s.lineName===lName; }).length;
+      return '<div class="food-rst-card" onclick="openMarketLineBrowse(\''+lName.replace(/'/g,"\\'")+'\')" style="cursor:pointer;padding:16px;display:flex;align-items:center;gap:12px;">'
+        +'<span style="font-size:1.6rem;">📍</span>'
+        +'<div style="flex:1;"><div class="food-rst-name">'+lName+'</div><div class="food-rst-loc">'+count+' shop'+(count!==1?'s':'')+'</div></div>'
+        +'<span style="color:var(--muted);">›</span></div>';
+    }).join('');
+    return;
+  }
+
+  if(_marketBrowse.level === 'shops'){
+    crumbEl.style.display='block';
+    var crumbHtml = '<span style="color:var(--green);cursor:pointer;" onclick="backToMarkets()">🏪 Markets</span> › ';
+    if(_marketBrowse.line){
+      crumbHtml += '<span style="color:var(--green);cursor:pointer;" onclick="openMarketBrowse(\''+_marketBrowse.market.replace(/'/g,"\\'")+'\')">'+_marketBrowse.market+'</span> › '+_marketBrowse.line;
+    } else {
+      crumbHtml += _marketBrowse.market;
+    }
+    crumbEl.innerHTML = crumbHtml;
+    var shopsHere = shops.filter(function(s){
+      return s.marketName===_marketBrowse.market && (!_marketBrowse.line || s.lineName===_marketBrowse.line);
+    });
+    if(!shopsHere.length){
+      listEl.innerHTML = '<div class="empty-box"><div class="ico">🏪</div><p>No shops here yet.</p></div>';
+      return;
+    }
+    listEl.innerHTML = shopsHere.map(function(s){
+      var itemCount = s.products ? Object.keys(s.products).length : 0;
+      return '<div class="food-rst-card" onclick="openShopDetail(\''+s.fbKey+'\')" style="cursor:pointer;padding:14px;">'
+        +'<div class="food-rst-name">Shop '+(s.shopNumber||'—')+': '+s.shopName+'</div>'
+        +'<div class="food-rst-loc">'+(s.sells||'')+'</div>'
+        +'<div style="font-size:0.68rem;color:var(--muted);margin-top:6px;">'+itemCount+' item'+(itemCount!==1?'s':'')+' · Tap to view →</div>'
+        +'</div>';
+    }).join('');
+    return;
+  }
+}
+
+function openMarketBrowse(marketName){
+  var shops = window.LIVE_SHOPS || [];
+  var marketShops = shops.filter(function(s){ return s.marketName===marketName; });
+  var hasLines = marketShops.some(function(s){ return s.lineName; });
+  _marketBrowse = { level: hasLines ? 'lines' : 'shops', market: marketName, line: null };
+  renderMarketsBrowse();
+}
+
+function openMarketLineBrowse(lineName){
+  _marketBrowse.level = 'shops';
+  _marketBrowse.line = lineName;
+  renderMarketsBrowse();
+}
+
+function backToMarkets(){
+  _marketBrowse = { level:'markets', market:null, line:null };
+  renderMarketsBrowse();
+}
+
+// Cross-market product search (Phase 5) — searches every shop's catalog
+// by product name and shows flat results, regardless of which market/line
+// they're in. Tapping a result opens that shop the same as browsing would.
+function searchMarketProducts(query){
+  query = (query||'').trim().toLowerCase();
+  var listEl = document.getElementById('market-browse-list');
+  var crumbEl = document.getElementById('market-breadcrumb');
+  if(!query){ renderMarketsBrowse(); return; }
+
+  var shops = window.LIVE_SHOPS || [];
+  var results = [];
+  shops.forEach(function(s){
+    var products = s.products ? Object.entries(s.products) : [];
+    products.forEach(function(p){
+      if((p[1].name||'').toLowerCase().indexOf(query) !== -1){
+        results.push({ shop:s, pKey:p[0], item:p[1] });
+      }
+    });
+  });
+
+  crumbEl.style.display='block';
+  crumbEl.textContent = results.length+' result'+(results.length!==1?'s':'')+' for "'+query+'"';
+
+  if(!results.length){
+    listEl.innerHTML = '<div class="empty-box"><div class="ico">🔍</div><p>No products match that search.</p></div>';
+    return;
+  }
+  listEl.innerHTML = results.map(function(r){
+    var thumbHtml = r.item.photoUrl
+      ? '<img src="'+r.item.photoUrl+'" alt="" style="width:100%;height:100%;object-fit:cover;">'
+      : '<span style="font-size:1.6rem;">'+(r.item.emoji||'🛍️')+'</span>';
+    return '<div class="food-rst-card" onclick="openShopDetail(\''+r.shop.fbKey+'\')" style="cursor:pointer;padding:10px;display:flex;align-items:center;gap:10px;">'
+      +'<div style="width:50px;height:50px;flex-shrink:0;border-radius:8px;overflow:hidden;background:var(--card2);display:flex;align-items:center;justify-content:center;">'+thumbHtml+'</div>'
+      +'<div style="flex:1;min-width:0;">'
+      +'<div style="font-weight:700;font-size:0.82rem;">'+r.item.name+'</div>'
+      +'<div style="font-size:0.7rem;color:var(--muted);">₦'+parseInt(r.item.price).toLocaleString()+' · '+r.shop.shopName+', '+r.shop.marketName+'</div>'
+      +'</div></div>';
+  }).join('');
+}
+
+// ══════════════════════════════════════════
+// VENDOR DETAIL PAGE — opened by tapping a vendor card. Shows only that
+// vendor's items, with much bigger photos than the old inline-list view.
+// ══════════════════════════════════════════
+window._openVendorKey = null;
+window._openShopKey = null;
+
+function openVendorDetail(rstKey){
+  var r = (window.LIVE_RESTAURANTS||[]).find(function(x){ return x.fbKey===rstKey; });
+  if(!r) return;
+  window._openVendorKey = rstKey;
+  window._openShopKey = null;
+
+  document.getElementById('vendor-detail-name').textContent = r.name;
+  document.getElementById('vendor-detail-banner').innerHTML = r.logoUrl
+    ? '<img src="'+r.logoUrl+'" alt="" style="width:100%;height:100%;object-fit:cover;">'
+    : '<span>'+(r.emoji||'🍽️')+'</span>';
+  document.getElementById('vendor-detail-meta').innerHTML =
+    '<div style="font-size:0.8rem;color:var(--muted);">📍 '+r.location+'</div>';
+
+  renderVendorDetailItems(r);
+  document.getElementById('vendor-detail-overlay').style.display = 'block';
+  document.getElementById('vendor-detail-overlay').scrollTop = 0;
+}
+
+function closeVendorDetail(){
+  document.getElementById('vendor-detail-overlay').style.display = 'none';
+  window._openVendorKey = null;
+  window._openShopKey = null;
+}
+
+// Shop catalog view — same overlay as the vendor detail page above, just
+// populated from shops/ instead of restaurants/. Reuses foodQty/foodCart
+// exactly as-is since they only take plain strings, never a restaurant
+// lookup.
+function openShopDetail(shopKey){
+  var s = (window.LIVE_SHOPS||[]).find(function(x){ return x.fbKey===shopKey; });
+  if(!s) return;
+  window._openShopKey = shopKey;
+  window._openVendorKey = null;
+
+  document.getElementById('vendor-detail-name').textContent = s.shopName;
+  document.getElementById('vendor-detail-banner').innerHTML = '<span>🏪</span>';
+  document.getElementById('vendor-detail-meta').innerHTML =
+    '<div style="font-size:0.8rem;color:var(--muted);">📍 '+s.marketName+(s.lineName?' · '+s.lineName:'')+' · Shop '+s.shopNumber+'</div>'
+    +(s.sells?'<div style="font-size:0.76rem;color:var(--muted);margin-top:3px;">'+s.sells+'</div>':'');
+
+  renderShopDetailItems(s);
+  document.getElementById('vendor-detail-overlay').style.display = 'block';
+  document.getElementById('vendor-detail-overlay').scrollTop = 0;
+}
+
+function renderShopDetailItems(s){
+  var itemsEl = document.getElementById('vendor-detail-items');
+  var products = s.products ? Object.entries(s.products) : [];
+  // Full pickup detail — a rider needs to find the exact stall, not just
+  // the market gate, so the shop/line number rides along as the pickup
+  // location string. getZoneDeliveryFeeSmart's fallback chain already
+  // handles messier location text, so this doesn't hurt fee accuracy.
+  var pickupLoc = (s.marketName||'') + (s.lineName?' · '+s.lineName:'') + ' · Shop '+(s.shopNumber||'');
+  if(!products.length){
+    itemsEl.innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted);font-size:0.8rem;">Nothing listed yet — check back soon.</div>';
+    return;
+  }
+  itemsEl.innerHTML = products.map(function(m){
+    var item = m[1]; var mKey = m[0];
+    var cartRst = foodCart[s.fbKey];
+    var existing = cartRst ? cartRst.items.find(function(i){ return i.mKey===mKey; }) : null;
+    var qty = existing ? existing.qty : 0;
+    var thumbHtml = item.photoUrl
+      ? '<img src="'+item.photoUrl+'" alt="" style="width:100%;height:100%;object-fit:cover;">'
+      : '<span style="font-size:2.6rem;">'+(item.emoji||'🛍️')+'</span>';
+    return '<div style="display:flex;gap:12px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:10px;margin-bottom:12px;align-items:center;">'
+      +'<div style="width:110px;height:110px;flex-shrink:0;border-radius:10px;overflow:hidden;background:var(--card2);display:flex;align-items:center;justify-content:center;">'+thumbHtml+'</div>'
+      +'<div style="flex:1;min-width:0;">'
+      +'<div style="font-weight:700;font-size:0.9rem;margin-bottom:4px;">'+item.name+'</div>'
+      +'<div style="font-family:\'Syne\',sans-serif;font-weight:800;color:var(--green);font-size:0.95rem;margin-bottom:8px;">₦'+parseInt(item.price).toLocaleString()+'</div>'
+      +'<div class="fmi-qty">'
+      +'<button class="'+(qty>0?'active':'')+'" onclick="foodQty(\''+s.fbKey+'\',\''+mKey+'\',\''+item.name+'\','+item.price+',\''+(item.emoji||'🛍️')+'\',\''+(s.shopName||'')+'\',\''+(s.phone||'')+'\',\''+pickupLoc+'\',1000,-1); refreshShopDetailQty(\''+s.fbKey+'\',\''+mKey+'\')">−</button>'
+      +'<span id="fqty-'+s.fbKey+'-'+mKey+'">'+(qty||0)+'</span>'
+      +'<button class="'+(qty>0?'active':'')+'" onclick="foodQty(\''+s.fbKey+'\',\''+mKey+'\',\''+item.name+'\','+item.price+',\''+(item.emoji||'🛍️')+'\',\''+(s.shopName||'')+'\',\''+(s.phone||'')+'\',\''+pickupLoc+'\',1000,1); refreshShopDetailQty(\''+s.fbKey+'\',\''+mKey+'\')">+</button>'
+      +'</div></div></div>';
+  }).join('');
+}
+
+function refreshShopDetailQty(shopKey, mKey){
+  var s = (window.LIVE_SHOPS||[]).find(function(x){ return x.fbKey===shopKey; });
+  if(s && window._openShopKey===shopKey) renderShopDetailItems(s);
+}
+
+function renderVendorDetailItems(r){
+  var itemsEl = document.getElementById('vendor-detail-items');
+  var menu = r.menu ? Object.entries(r.menu) : [];
+  if(!menu.length){
+    itemsEl.innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted);font-size:0.8rem;">Nothing listed yet — check back soon.</div>';
+    return;
+  }
+  itemsEl.innerHTML = menu.map(function(m){
+    var item = m[1]; var mKey = m[0];
+    var cartRst = foodCart[r.fbKey];
+    var existing = cartRst ? cartRst.items.find(function(i){ return i.mKey===mKey; }) : null;
+    var qty = existing ? existing.qty : 0;
+    var thumbHtml = item.photoUrl
+      ? '<img src="'+item.photoUrl+'" alt="" style="width:100%;height:100%;object-fit:cover;">'
+      : '<span style="font-size:2.6rem;">'+(item.emoji||'🍽️')+'</span>';
+    return '<div style="display:flex;gap:12px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:10px;margin-bottom:12px;align-items:center;">'
+      +'<div style="width:110px;height:110px;flex-shrink:0;border-radius:10px;overflow:hidden;background:var(--card2);display:flex;align-items:center;justify-content:center;">'+thumbHtml+'</div>'
+      +'<div style="flex:1;min-width:0;">'
+      +'<div style="font-weight:700;font-size:0.9rem;margin-bottom:4px;">'+item.name+'</div>'
+      +'<div style="font-family:\'Syne\',sans-serif;font-weight:800;color:var(--green);font-size:0.95rem;margin-bottom:8px;">₦'+parseInt(item.price).toLocaleString()+'</div>'
+      +'<div class="fmi-qty">'
+      +'<button class="'+(qty>0?'active':'')+'" onclick="foodQty(\''+r.fbKey+'\',\''+mKey+'\',\''+item.name+'\','+item.price+',\''+(item.emoji||'🍽️')+'\',\''+(r.name||'')+'\',\''+(r.phone||'')+'\',\''+(r.location||'')+'\','+(r.deliveryFee||1000)+',-1); refreshVendorDetailQty(\''+r.fbKey+'\',\''+mKey+'\')">−</button>'
+      +'<span id="fqty-'+r.fbKey+'-'+mKey+'">'+(qty||0)+'</span>'
+      +'<button class="'+(qty>0?'active':'')+'" onclick="foodQty(\''+r.fbKey+'\',\''+mKey+'\',\''+item.name+'\','+item.price+',\''+(item.emoji||'🍽️')+'\',\''+(r.name||'')+'\',\''+(r.phone||'')+'\',\''+(r.location||'')+'\','+(r.deliveryFee||1000)+',1); refreshVendorDetailQty(\''+r.fbKey+'\',\''+mKey+'\')">+</button>'
+      +'</div>'
+      +'</div>'
+      +'</div>';
+  }).join('');
+}
+
+// After a +/- tap on the detail page, just refresh this one item's qty label
+// (the vendor list card behind it will pick up totals via updateCartBar()
+// which foodQty already calls).
+function refreshVendorDetailQty(rstKey, mKey){
+  var r = (window.LIVE_RESTAURANTS||[]).find(function(x){ return x.fbKey===rstKey; });
+  if(r && window._openVendorKey===rstKey) renderVendorDetailItems(r);
 }
 
 function foodQty(rstKey, mKey, name, price, emoji, rstName, rstPhone, rstLocation, deliveryFee, delta){
@@ -5031,12 +5825,348 @@ function updateCartBar(){
   var cart = foodCart[rstKey];
   var totalItems = cart.items.reduce(function(s,i){ return s+i.qty; }, 0);
   var subtotal = cart.items.reduce(function(s,i){ return s+i.price*i.qty; }, 0);
-  var grand = subtotal + (cart.deliveryFee||500);
+  var grand = subtotal + effectiveFoodDeliveryFee(cart);
   if(bar){
     bar.classList.add('show');
     document.getElementById('fcb-summary').textContent = totalItems+' item'+(totalItems!==1?'s':'')+' · '+cart.rstName;
     document.getElementById('fcb-total').textContent = 'Total: ₦'+grand.toLocaleString();
   }
+}
+
+// Real distance-based food delivery fee, same pattern as Goods and Market —
+// resolved once the customer has typed an address and paused, with the
+// vendor's own flat deliveryFee as an immediate fallback so nothing ever
+// blocks checkout while we wait for geocoding.
+window._foodDeliveryFeeResolved = null;
+let _foodFareDebounceTimer = null;
+let _foodFareToken = 0;
+
+function effectiveFoodDeliveryFee(cart){
+  if(window._foodDeliveryFeeResolved !== null) return window._foodDeliveryFeeResolved;
+  var addr = (document.getElementById('food-addr')||{}).value||'';
+  return getZoneDeliveryFeeSmart(null, (cart&&cart.rstLocation)||'', addr).fee;
+}
+
+function recalcFoodDeliveryFee(){
+  var keys = Object.keys(foodCart);
+  if(!keys.length) return;
+  var cart = foodCart[keys[0]];
+  var addr = (document.getElementById('food-addr').value||'').trim();
+  if(!cart.rstLocation || addr.length < 3){ window._foodDeliveryFeeResolved = null; return; }
+
+  clearTimeout(_foodFareDebounceTimer);
+  var myToken = ++_foodFareToken;
+  _foodFareDebounceTimer = setTimeout(function(){
+    getRealDistanceKm(cart.rstLocation, addr).then(function(km){
+      if(myToken !== _foodFareToken) return;
+      // Resolve to a real fee either way — smart zone fallback instead of
+      // silently keeping the cheapest tier when geocoding fails.
+      window._foodDeliveryFeeResolved = getZoneDeliveryFeeSmart(km, cart.rstLocation, addr).fee;
+      // Refresh whatever's currently on screen with the real fee
+      if(document.getElementById('food-checkout-overlay').classList.contains('open')) openFoodCheckout();
+      updateCartBar();
+    });
+  }, 800);
+}
+
+// ══════════════════════════════════════════
+// BOOK A DELIVERY — customer self-service send/fetch flow
+// ══════════════════════════════════════════
+window._delFeeResolved = null;
+window._delPin = null; // {lat, lon} if the customer used the optional map pin
+window._delPayMethod = 'Cash'; // default matches the button highlighted by default in the HTML
+let _delFareDebounceTimer = null;
+let _delFareToken = 0;
+
+function selDeliveryPay(method){
+  window._delPayMethod = method;
+  var cardBtn = document.getElementById('del-pay-card');
+  var cashBtn = document.getElementById('del-pay-cash');
+  var walletBtn = document.getElementById('del-pay-wallet');
+  var acctBox = document.getElementById('del-pay-account');
+  var walletBox = document.getElementById('del-pay-wallet-bal');
+  var walletNote = document.getElementById('del-pay-wallet-note');
+  var activeStyle = 'padding:10px 4px;border:1.5px solid var(--green);background:var(--gl);border-radius:10px;font-family:\'Syne\',sans-serif;font-weight:700;font-size:0.7rem;color:var(--green);cursor:pointer;';
+  var inactiveStyle = 'padding:10px 4px;border:1.5px solid var(--border);background:transparent;border-radius:10px;font-family:\'Syne\',sans-serif;font-weight:700;font-size:0.7rem;color:var(--muted);cursor:pointer;';
+  cardBtn.setAttribute('style', method==='Card' ? activeStyle : inactiveStyle);
+  cashBtn.setAttribute('style', method==='Cash' ? activeStyle : inactiveStyle);
+  walletBtn.setAttribute('style', method==='Wallet' ? activeStyle : inactiveStyle);
+  if(acctBox) acctBox.style.display = (method==='Card') ? 'block' : 'none';
+  if(walletNote) walletNote.style.display = (method==='Wallet') ? 'block' : 'none';
+  if(method==='Wallet' && walletBox) walletBox.textContent = '₦'+getWallet().toLocaleString();
+}
+
+function calcDeliveryFee(){
+  var p = (document.getElementById('del-pickup').value||'').trim();
+  var d = (document.getElementById('del-dest').value||'').trim();
+  var summaryEl = document.getElementById('del-fee-summary');
+  var amtEl = document.getElementById('del-fee-amt');
+  var noteEl = document.getElementById('del-fee-note');
+
+  if(p.length < 3 || d.length < 3){ summaryEl.style.display='none'; window._delFeeResolved=null; return; }
+
+  // Show the smart zone-based guess immediately (admin route pairs / known
+  // town pairs / text heuristics — instant, offline) instead of the flat
+  // advertised minimum while real geocoding refines it in the background.
+  var rough = getZoneDeliveryFeeSmart(null, p, d);
+  amtEl.textContent = '₦'+rough.fee.toLocaleString();
+  noteEl.textContent = rough.label+' · refining with real distance…';
+  summaryEl.style.display='block';
+
+  clearTimeout(_delFareDebounceTimer);
+  var myToken = ++_delFareToken;
+  _delFareDebounceTimer = setTimeout(function(){
+    getRealDistanceKm(p, d).then(function(km){
+      if(myToken !== _delFareToken) return;
+      // Whether or not geocoding succeeded, resolve to a real fee now —
+      // getZoneDeliveryFeeSmart falls back to the text-based zone detector
+      // instead of silently keeping the cheapest tier when the address
+      // can't be geocoded.
+      var zone = getZoneDeliveryFeeSmart(km, p, d);
+      window._delFeeResolved = zone.fee;
+      amtEl.textContent = '₦'+zone.fee.toLocaleString();
+      noteEl.textContent = km !== null ? (km+' km · '+zone.label) : (zone.label+' · address not recognized, priced by area');
+    });
+  }, 800);
+}
+
+function effectiveDeliveryFee(){
+  if(window._delFeeResolved !== null) return window._delFeeResolved;
+  // Fast-submit edge case: user booked before the 800ms debounce resolved.
+  // Still price by the smart zone fallback rather than the flat minimum.
+  var p = (document.getElementById('del-pickup')||{}).value||'';
+  var d = (document.getElementById('del-dest')||{}).value||'';
+  return getZoneDeliveryFeeSmart(null, p, d).fee;
+}
+
+// Optional map pin — reuses the Leaflet library already loaded for live
+// tracking elsewhere in the app. Purely additive: skipping this still works
+// fine since the typed address is already geocoded for pricing.
+let _delPinMap = null, _delPinMarker = null;
+function openDeliveryPinMap(){
+  var overlay = document.createElement('div');
+  overlay.id = 'del-pin-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;flex-direction:column;';
+  overlay.innerHTML =
+    '<div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">'
+    + '<div style="font-family:\'Syne\',sans-serif;font-weight:800;font-size:0.9rem;">📍 Tap to drop your pin</div>'
+    + '<button onclick="closeDeliveryPinMap()" style="background:none;border:none;color:var(--text);font-size:1.3rem;cursor:pointer;">×</button>'
+    + '</div>'
+    + '<div id="del-pin-map" style="flex:1;"></div>'
+    + '<div style="padding:14px;border-top:1px solid var(--border);">'
+    + '<button onclick="confirmDeliveryPin()" style="width:100%;padding:13px;background:var(--green);border:none;border-radius:11px;font-family:\'Syne\',sans-serif;font-weight:700;color:#000;cursor:pointer;">✅ Confirm this spot</button>'
+    + '</div>';
+  document.body.appendChild(overlay);
+
+  var startLat = 9.1810, startLon = 7.1878; // default: Suleja, Niger State
+  function initMap(lat, lon){
+    _delPinMap = L.map('del-pin-map').setView([lat, lon], 15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(_delPinMap);
+    _delPinMarker = L.marker([lat, lon], { draggable: true }).addTo(_delPinMap);
+    window._delPin = { lat: lat, lon: lon };
+    _delPinMap.on('click', function(e){
+      _delPinMarker.setLatLng(e.latlng);
+      window._delPin = { lat: e.latlng.lat, lon: e.latlng.lng };
+    });
+    _delPinMarker.on('dragend', function(){
+      var pos = _delPinMarker.getLatLng();
+      window._delPin = { lat: pos.lat, lon: pos.lng };
+    });
+  }
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(
+      function(pos){ initMap(pos.coords.latitude, pos.coords.longitude); },
+      function(){ initMap(startLat, startLon); },
+      { timeout: 4000 }
+    );
+  } else {
+    initMap(startLat, startLon);
+  }
+}
+function closeDeliveryPinMap(){
+  var overlay = document.getElementById('del-pin-overlay');
+  if(overlay) overlay.remove();
+  if(_delPinMap){ _delPinMap.remove(); _delPinMap = null; }
+}
+function confirmDeliveryPin(){
+  var statusEl = document.getElementById('del-pin-status');
+  if(statusEl && window._delPin) statusEl.textContent = '✅ Exact spot pinned — your rider will see this on the map';
+  closeDeliveryPinMap();
+}
+
+function bookCustomerDelivery(){
+  var name = (document.getElementById('del-name').value||'').trim();
+  var phone = (document.getElementById('del-phone').value||'').trim();
+  var pickup = (document.getElementById('del-pickup').value||'').trim();
+  var dest = (document.getElementById('del-dest').value||'').trim();
+  var receiverPhone = (document.getElementById('del-receiver-phone').value||'').trim();
+  var category = document.getElementById('del-category').value;
+  var when = document.getElementById('del-when').value;
+  var notes = (document.getElementById('del-notes').value||'').trim();
+
+  if(!name || phone.length < 10 || !pickup || !dest || receiverPhone.length < 10){
+    showToast('⚠️ Please fill in your name, phone, pickup, drop-off, and receiver\'s phone');
+    return;
+  }
+  if(!window.firebaseReady || !window.firebaseDB){
+    showToast('⚠️ Not connected yet — please try again in a moment');
+    return;
+  }
+
+  var fee = effectiveDeliveryFee();
+  var btn = event && event.target;
+
+  var details = { name:name, phone:phone, pickup:pickup, dest:dest, receiverPhone:receiverPhone,
+    category:category, when:when, notes:notes, fee:fee };
+
+  if(window._delPayMethod === 'Card'){
+    payDeliveryWithPaystack(details, btn);
+  } else if(window._delPayMethod === 'Wallet'){
+    var bal = getWallet();
+    if(bal < fee){ showToast('⚠️ Wallet too low. Top up first.'); goPage('wallet'); return; }
+    localStorage.setItem('rn_wallet', (bal-fee).toString());
+    addTxn('Delivery — '+dest, fee, 'debit');
+    if(btn) { btn.disabled = true; btn.textContent = 'Booking...'; }
+    finalizeCustomerDelivery(details, 'WALLET-'+Date.now(), btn);
+  } else {
+    if(btn) { btn.disabled = true; btn.textContent = 'Booking...'; }
+    finalizeCustomerDelivery(details, null, btn);
+  }
+}
+
+// Paystack popup for Delivery — mirrors doPaystackWithRider's pattern (same
+// public key, same inline.js library already loaded in this file). Only
+// writes the booking to Firebase AFTER payment succeeds, so an abandoned
+// or cancelled payment never creates a phantom order for dispatch to see.
+function payDeliveryWithPaystack(details, btn){
+  if(typeof PaystackPop === 'undefined'){
+    showToast('⚠️ Payment service unavailable — please try Pay on Delivery instead');
+    return;
+  }
+  if(btn) { btn.disabled = true; btn.textContent = 'Processing...'; btn.style.opacity='0.7'; }
+
+  var email = details.phone.replace(/^0/,'234')+'@ridenaija.ng';
+  var ref = 'RNDEL-'+Date.now();
+
+  // Save intent BEFORE opening Paystack — if the browser refreshes or the
+  // app loses connection right after payment, the "I have sent the money"
+  // recovery banner on next load can still confirm this booking. Same
+  // safety net rides already have.
+  localStorage.setItem('rn_pending_payment', JSON.stringify({
+    orderType:'delivery', ref:ref, timestamp:Date.now(),
+    pickup:details.pickup, dest:details.dest, fare:details.fee,
+    payload: details
+  }));
+
+  var handler = PaystackPop.setup({
+    key:'pk_live_f954352f9790a0c362e7730333b99e12f141958f',
+    email: email,
+    amount: details.fee*100,
+    currency:'NGN',
+    ref: ref,
+    phone: details.phone,
+    metadata:{ type:'delivery', pickup:details.pickup, destination:details.dest, phone:details.phone },
+    callback(res){
+      localStorage.removeItem('rn_pending_payment'); // clear — finalizing now
+      finalizeCustomerDelivery(details, res.reference, btn);
+    },
+    onClose(){
+      if(btn){ btn.disabled=false; btn.textContent='Book this delivery →'; btn.style.opacity='1'; }
+      localStorage.removeItem('rn_pending_payment'); // clear — user cancelled
+      showToast('Payment cancelled');
+    }
+  });
+  handler.openIframe();
+}
+
+// Writes the booking to Firebase and resets the form — same for Cash
+// (paystackRef null) and Card (paystackRef set) once payment is confirmed.
+function finalizeCustomerDelivery(details, paystackRef, btn){
+  var name=details.name, phone=details.phone, pickup=details.pickup, dest=details.dest,
+      receiverPhone=details.receiverPhone, category=details.category, when=details.when,
+      notes=details.notes, fee=details.fee;
+
+  // Dedup guard — if this exact Paystack ref was already saved (e.g. the
+  // callback already fired once before a recovery banner also tried),
+  // don't create a second order for the same payment.
+  if(paystackRef){
+    var savedRefs = JSON.parse(localStorage.getItem('rn_saved_refs')||'[]');
+    if(savedRefs.includes(paystackRef)){
+      console.warn('[RideNaija] Duplicate delivery booking blocked — ref already saved:', paystackRef);
+      return;
+    }
+    savedRefs.push(paystackRef);
+    if(savedRefs.length > 30) savedRefs.shift();
+    localStorage.setItem('rn_saved_refs', JSON.stringify(savedRefs));
+  }
+
+  generateTrackingId().then(function(trackingId){
+    var bkData = {
+      source: 'delivery_request',
+      senderName: name,
+      phone: phone,
+      custPhone: phone,
+      pickup: pickup,
+      destination: dest,
+      receiverPhone: receiverPhone,
+      category: category,
+      whenNeeded: when,
+      notes: notes,
+      fare: fee,
+      deliveryFee: fee,
+      payMethod: window._delPayMethod,
+      status: 'active',
+      rideStatus: 'pending',
+      deliveryStage: 'order_placed',
+      deliveryStageUpdatedAt: new Date().toISOString(),
+      riderName: '', riderPhone: '',
+      time: new Date().toISOString()
+    };
+    if(paystackRef) bkData.paystackRef = paystackRef;
+    if(window._delPin){
+      bkData.pickupLat = window._delPin.lat;
+      bkData.pickupLon = window._delPin.lon;
+    }
+
+    window.firebaseDB.ref('bookings/'+trackingId).set(bkData).then(function(){
+      showToast(paystackRef ? '✅ Payment received! Delivery booked — Tracking ID: '+trackingId : '✅ Delivery booked! Tracking ID: '+trackingId);
+
+      // Notify admin the same way every other order type does
+      fetch('/api/send-notification', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          adminBroadcast: true,
+          title: '📦 New Delivery Request — Needs Rider',
+          body: pickup+' → '+dest+' · ₦'+fee.toLocaleString()+(paystackRef?' · Paid via Paystack':''),
+          data: { link:'/admin.html', bookingId: trackingId }
+        })
+      }).catch(function(){});
+
+      // Save to local history
+      var localBks = JSON.parse(localStorage.getItem('rn_bookings')||'[]');
+      localBks.unshift(Object.assign({ id: trackingId, fbKey: trackingId }, bkData));
+      localStorage.setItem('rn_bookings', JSON.stringify(localBks.slice(0,80)));
+
+      // Reset form
+      ['del-name','del-phone','del-pickup','del-dest','del-receiver-phone','del-notes'].forEach(function(id){
+        var el = document.getElementById(id); if(el) el.value = '';
+      });
+      document.getElementById('del-fee-summary').style.display = 'none';
+      document.getElementById('del-pin-status').textContent = '';
+      window._delFeeResolved = null;
+      window._delPin = null;
+      selDeliveryPay('Cash');
+      if(btn){ btn.disabled = false; btn.textContent = 'Book this delivery →'; btn.style.opacity='1'; }
+
+      // Show tracking link
+      setTimeout(function(){
+        showToast('📍 Track it any time: /track.html?id='+trackingId);
+      }, 2500);
+    }).catch(function(e){
+      showToast('❌ Could not book delivery: '+e.message);
+      if(btn){ btn.disabled = false; btn.textContent = 'Book this delivery →'; btn.style.opacity='1'; }
+    });
+  });
 }
 
 function openFoodCheckout(){
@@ -5045,7 +6175,8 @@ function openFoodCheckout(){
   var rstKey = keys[0];
   var cart = foodCart[rstKey];
   var subtotal = cart.items.reduce(function(s,i){ return s+i.price*i.qty; }, 0);
-  var grand = subtotal + (cart.deliveryFee||500);
+  var delFee = effectiveFoodDeliveryFee(cart);
+  var grand = subtotal + delFee;
 
   var itemsHtml = cart.items.map(function(i){
     return '<div class="food-checkout-item"><span>'+(i.emoji||'🍽️')+' '+i.name+' × '+i.qty+'</span><span>₦'+(i.price*i.qty).toLocaleString()+'</span></div>';
@@ -5053,7 +6184,7 @@ function openFoodCheckout(){
   document.getElementById('food-checkout-items').innerHTML = itemsHtml;
   document.getElementById('food-checkout-totals').innerHTML =
     '<div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:var(--muted);">Subtotal</span><span>₦'+subtotal.toLocaleString()+'</span></div>'
-    +'<div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:var(--muted);">Delivery fee</span><span>₦'+(cart.deliveryFee||500).toLocaleString()+'</span></div>'
+    +'<div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:var(--muted);">Delivery fee</span><span>₦'+delFee.toLocaleString()+(window._foodDeliveryFeeResolved!==null?'':' (est.)')+'</span></div>'
     +'<div style="display:flex;justify-content:space-between;font-family:\'Syne\',sans-serif;font-weight:800;font-size:0.92rem;border-top:1px solid var(--border);padding-top:6px;margin-top:4px;"><span>Total</span><span style="color:var(--green);">₦'+grand.toLocaleString()+'</span></div>';
 
   // Pre-fill phone from profile
@@ -5069,6 +6200,10 @@ function selFoodPay(method, el){
   el.classList.add('active');
   var acctBox = document.getElementById('food-pay-account');
   if(acctBox) acctBox.style.display = (method==='transfer'||method==='card') ? 'block' : 'none';
+  var walletNote = document.getElementById('food-pay-wallet-note');
+  var walletBal = document.getElementById('food-pay-wallet-bal');
+  if(walletNote) walletNote.style.display = (method==='wallet') ? 'block' : 'none';
+  if(method==='wallet' && walletBal) walletBal.textContent = '₦'+getWallet().toLocaleString();
 }
 
 function placeFoodOrder(){
@@ -5083,14 +6218,102 @@ function placeFoodOrder(){
   if(!phone){ showToast('⚠️ Enter your phone number'); return; }
 
   var subtotal = cart.items.reduce(function(s,i){ return s+i.price*i.qty; }, 0);
-  var grand = subtotal + (cart.deliveryFee||500);
+  var realDelFee = effectiveFoodDeliveryFee(cart);
+  var grand = subtotal + realDelFee;
   var itemsSummary = cart.items.map(function(i){ return i.qty+'× '+i.name+' (₦'+i.price+')'; }).join(', ');
 
-  var bkKey = 'FOOD_' + Date.now() + '_' + phone.slice(-4);
-  // Look up restaurant state from the restaurants registry
   var _rstRecord = (window.FB_RESTAURANTS||[]).find(function(r){ return r.fbKey===rstKey || r.name===cart.rstName; });
+  var _shopRecord = !_rstRecord ? (window.LIVE_SHOPS||[]).find(function(s){ return s.fbKey===rstKey || s.shopName===cart.rstName; }) : null;
   var _rstState = (_rstRecord && _rstRecord.state) || '';
-  var _vendorCategory = (_rstRecord && _rstRecord.category) || 'Food';
+  var _vendorCategory = (_rstRecord && _rstRecord.category) || (_shopRecord ? 'Marketplace' : 'Food');
+
+  var details = { rstKey:rstKey, cart:cart, addr:addr, phone:phone, notes:notes,
+    subtotal:subtotal, realDelFee:realDelFee, grand:grand, itemsSummary:itemsSummary,
+    rstState:_rstState, vendorCategory:_vendorCategory };
+
+  var btn = document.getElementById('food-submit-btn');
+  if(btn) btn.disabled = true;
+
+  if(foodPayMethod === 'transfer' || foodPayMethod === 'card'){
+    payFoodWithPaystack(details, btn);
+  } else if(foodPayMethod === 'wallet'){
+    var bal = getWallet();
+    if(bal < grand){
+      showToast('⚠️ Wallet too low. Top up first.');
+      if(btn) btn.disabled = false;
+      goPage('wallet');
+      return;
+    }
+    localStorage.setItem('rn_wallet', (bal-grand).toString());
+    addTxn('Food order — '+cart.rstName, grand, 'debit');
+    if(btn) btn.textContent = '⏳ Placing order...';
+    finalizeFoodOrder(details, 'WALLET-'+Date.now(), btn);
+  } else {
+    if(btn) btn.textContent = '⏳ Placing order...';
+    finalizeFoodOrder(details, null, btn);
+  }
+}
+
+// Paystack popup for Food/Shop orders — same pattern as Delivery and Market.
+// Covers both "transfer" and "card" selections since Paystack's own popup
+// already offers card, bank transfer, and USSD in one screen.
+function payFoodWithPaystack(details, btn){
+  if(typeof PaystackPop === 'undefined'){
+    showToast('⚠️ Payment service unavailable — please try Cash instead');
+    if(btn) btn.disabled = false;
+    return;
+  }
+  if(btn){ btn.textContent = 'Processing...'; btn.style.opacity='0.7'; }
+
+  var email = details.phone.replace(/^0/,'234')+'@ridenaija.ng';
+  var ref = 'RNFOOD-'+Date.now();
+
+  localStorage.setItem('rn_pending_payment', JSON.stringify({
+    orderType:'food', ref:ref, timestamp:Date.now(),
+    pickup:details.cart.rstLocation, dest:details.addr, fare:details.grand,
+    payload: details
+  }));
+
+  var handler = PaystackPop.setup({
+    key:'pk_live_f954352f9790a0c362e7730333b99e12f141958f',
+    email: email,
+    amount: details.grand*100,
+    currency:'NGN',
+    ref: ref,
+    phone: details.phone,
+    metadata:{ type:'food', restaurant:details.cart.rstName, destination:details.addr, phone:details.phone },
+    callback(res){
+      localStorage.removeItem('rn_pending_payment');
+      if(btn) btn.textContent = '⏳ Placing order...';
+      finalizeFoodOrder(details, res.reference, btn);
+    },
+    onClose(){
+      if(btn){ btn.disabled=false; btn.textContent='🍽️ Place Order'; btn.style.opacity='1'; }
+      localStorage.removeItem('rn_pending_payment');
+      showToast('Payment cancelled');
+    }
+  });
+  handler.openIframe();
+}
+
+function finalizeFoodOrder(details, paystackRef, btn){
+  var rstKey=details.rstKey, cart=details.cart, addr=details.addr, phone=details.phone,
+      notes=details.notes, subtotal=details.subtotal, realDelFee=details.realDelFee,
+      grand=details.grand, itemsSummary=details.itemsSummary,
+      _rstState=details.rstState, _vendorCategory=details.vendorCategory;
+
+  if(paystackRef){
+    var savedRefs = JSON.parse(localStorage.getItem('rn_saved_refs')||'[]');
+    if(savedRefs.includes(paystackRef)){
+      console.warn('[RideNaija] Duplicate food order blocked — ref already saved:', paystackRef);
+      return;
+    }
+    savedRefs.push(paystackRef);
+    if(savedRefs.length > 30) savedRefs.shift();
+    localStorage.setItem('rn_saved_refs', JSON.stringify(savedRefs));
+  }
+
+  var bkKey = 'FOOD_' + Date.now() + '_' + phone.slice(-4);
   var _isFoodCat = _vendorCategory === 'Food';
   var _orderLabel = _isFoodCat ? 'Food Order' : (_vendorCategory + ' Order');
   var _orderEmoji = _isFoodCat ? '🍽️' : '🛍️';
@@ -5103,7 +6326,7 @@ function placeFoodOrder(){
     items: itemsSummary,
     cartJson: JSON.stringify(cart.items),
     subtotal: subtotal,
-    deliveryFee: cart.deliveryFee || 500,
+    deliveryFee: realDelFee,
     fare: grand,
     destination: addr,
     pickup: cart.rstLocation,
@@ -5118,6 +6341,7 @@ function placeFoodOrder(){
     riderName: '', riderPhone: '',
     time: new Date().toISOString()
   };
+  if(paystackRef) bkData.paystackRef = paystackRef;
 
   if(window.firebaseReady && window.firebaseDB){
     window.firebaseDB.ref('bookings/'+bkKey).set(bkData).then(function(){
@@ -5153,7 +6377,7 @@ function placeFoodOrder(){
         body: JSON.stringify({
           adminBroadcast: true,
           title: _orderEmoji+' New '+_orderLabel+' — Needs Rider',
-          body: cart.rstName+' → '+addr+' · ₦'+grand.toLocaleString(),
+          body: cart.rstName+' → '+addr+' · ₦'+grand.toLocaleString()+(paystackRef?' · Paid via Paystack':''),
           data: { link:'/admin.html', bookingId:bkKey }
         })
       }).catch(function(){});
@@ -5167,9 +6391,9 @@ function placeFoodOrder(){
         +'📦 Items:\n'+cart.items.map(function(i){ return '  '+i.emoji+' '+i.name+' × '+i.qty+' = ₦'+(i.price*i.qty).toLocaleString(); }).join('\n')+'\n'
         +'━━━━━━━━━━━━━━━━━\n'
         +'🛍️ Subtotal: ₦'+subtotal.toLocaleString()+'\n'
-        +'🏍️ Delivery fee: ₦'+(cart.deliveryFee||500).toLocaleString()+'\n'
+        +'🏍️ Delivery fee: ₦'+realDelFee.toLocaleString()+'\n'
         +'💰 *Total: ₦'+grand.toLocaleString()+'*\n'
-        +'💳 Payment: '+foodPayMethod+'\n'
+        +'💳 Payment: '+foodPayMethod+(paystackRef?' (paid)':'')+'\n'
         +'📍 Deliver to: '+addr+'\n'
         +'🕐 Ordered: '+timeStr+'\n'
         +(notes?'📝 Notes: '+notes+'\n':'')
@@ -5186,7 +6410,7 @@ function placeFoodOrder(){
       document.getElementById('food-notes').value='';
       updateCartBar();
       renderFoodTab();
-      showToast('✅ Order placed! Opening WhatsApp receipt...');
+      showToast(paystackRef ? '✅ Payment received! Order placed — opening WhatsApp receipt...' : '✅ Order placed! Opening WhatsApp receipt...');
       setTimeout(function(){ window.open(waUrl,'_blank'); }, 800);
 
       // Save food order to local history so it appears in the History tab
@@ -5199,7 +6423,7 @@ function placeFoodOrder(){
         pickup: cart.rstLocation,
         destination: addr,
         subtotal: subtotal,
-        deliveryFee: cart.deliveryFee||500,
+        deliveryFee: realDelFee,
         fare: grand,
         payMethod: foodPayMethod,
         phone: phone,
@@ -5207,13 +6431,17 @@ function placeFoodOrder(){
         time: new Date().toISOString()
       });
       localStorage.setItem('rn_bookings', JSON.stringify(localBks.slice(0,80)));
+      if(btn){ btn.disabled=false; btn.textContent='🍽️ Place Order'; btn.style.opacity='1'; }
     }).catch(function(e){
       showToast('❌ Failed to place order. Check your connection.');
+      if(btn){ btn.disabled=false; btn.textContent='🍽️ Place Order'; btn.style.opacity='1'; }
     });
   } else {
     showToast('❌ No internet connection. Try again.');
+    if(btn){ btn.disabled=false; btn.textContent='🍽️ Place Order'; btn.style.opacity='1'; }
   }
 }
 </script>
+</div>
 </body>
 </html>

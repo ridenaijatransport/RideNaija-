@@ -137,7 +137,7 @@
 
     const typeLabel = b.source==='food_order' ? '🍽️ Food Delivery'
       : b.source==='market_order' || b.type==='market' ? '🛒 Market Order'
-      : b.source==='delivery_partner' ? '📦 Package Delivery'
+      : b.source==='delivery_partner' || b.source==='delivery_request' || b.source==='parcel_intake' ? '📦 Package Delivery'
       : '🚗 Ride';
     document.getElementById('rc-type').textContent = typeLabel;
     document.getElementById('rc-amount').textContent = '₦' + (b.fare||0).toLocaleString();

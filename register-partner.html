@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<title>Join RideNaija – Partner Registration</title>
+<meta name="theme-color" content="#00b865"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getDatabase, ref, push, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyAAGIy2WpDB491rR1M8oCGEzThuMrrJMrA",
+    authDomain: "ridenaija-14d88.firebaseapp.com",
+    databaseURL: "https://ridenaija-14d88-default-rtdb.firebaseio.com",
+    projectId: "ridenaija-14d88",
+    storageBucket: "ridenaija-14d88.firebasestorage.app",
+    messagingSenderId: "75868798616",
+    appId: "1:75868798616:web:eb8ceadb9992fb79ee5aed"
+  };
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+  window._db = db;
+  window._ref = ref;
+  window._push = push;
+  window._set = set;
+  window.fbReady = true;
+</script>
+<style>
+:root{--green:#00b865;--gd:#008f4c;--bg:#0a0f0d;--card:#111a14;--card2:#162019;--border:#1e3326;--text:#e8f5ec;--muted:#6b8f76;--red:#ff4f4f;}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:40px;}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 60% 40% at 80% 10%,rgba(0,184,101,0.09) 0%,transparent 70%);pointer-events:none;z-index:0;}
+
+.topnav{position:sticky;top:0;z-index:100;display:flex;align-items:center;gap:12px;padding:13px 16px;background:rgba(10,15,13,0.94);backdrop-filter:blur(14px);border-bottom:1px solid var(--border);}
+.back-btn{background:transparent;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer;}
+.logo{font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:800;}
+.logo span{color:var(--green);}
+
+.hero{padding:28px 16px 16px;text-align:center;}
+.hero-icon{font-size:2.6rem;margin-bottom:10px;}
+.hero h1{font-family:'Syne',sans-serif;font-size:1.35rem;font-weight:800;margin-bottom:6px;}
+.hero h1 em{color:var(--green);font-style:normal;}
+.hero p{font-size:0.78rem;color:var(--muted);line-height:1.6;max-width:340px;margin:0 auto;}
+
+.content{padding:0 16px;position:relative;z-index:1;}
+.section-title{font-family:'Syne',sans-serif;font-weight:800;font-size:0.88rem;color:var(--green);margin:22px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border);}
+.form-group{margin-bottom:12px;}
+.form-group label{display:block;font-size:0.67rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;}
+.form-group input,.form-group select,.form-group textarea{width:100%;background:var(--card2);border:1.5px solid var(--border);border-radius:9px;padding:11px 13px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.86rem;outline:none;-webkit-appearance:none;transition:border-color 0.2s;}
+.form-group input::placeholder,.form-group textarea::placeholder{color:var(--muted);}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--green);}
+.form-group select option{background:#111;}
+
+.radio-row,.check-row{display:flex;flex-direction:column;gap:8px;}
+.radio-opt,.check-opt{display:flex;align-items:center;gap:10px;background:var(--card2);border:1.5px solid var(--border);border-radius:9px;padding:11px 13px;cursor:pointer;}
+.radio-opt input,.check-opt input{width:auto;accent-color:var(--green);}
+.radio-opt span,.check-opt span{font-size:0.84rem;}
+
+.agreement-box{background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:14px;font-size:0.76rem;color:var(--muted);line-height:1.8;margin-bottom:14px;}
+.agreement-box li{margin-left:16px;margin-bottom:4px;}
+
+.verify-note{background:rgba(0,184,101,0.08);border:1.5px solid rgba(0,184,101,0.3);border-radius:12px;padding:14px;font-size:0.76rem;color:var(--text);line-height:1.8;margin-bottom:14px;}
+.verify-note b{color:var(--green);}
+
+.submit-btn{width:100%;padding:15px;background:linear-gradient(135deg,var(--gd),var(--green));border:none;border-radius:13px;font-family:'Syne',sans-serif;font-size:0.95rem;font-weight:800;color:#000;cursor:pointer;margin-top:8px;}
+.err-msg{color:var(--red);font-size:0.76rem;text-align:center;margin-top:10px;display:none;}
+
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--green);color:#000;padding:11px 20px;border-radius:20px;font-size:0.8rem;font-weight:700;opacity:0;transition:opacity 0.3s;z-index:999;white-space:nowrap;}
+.toast.show{opacity:1;}
+
+#success-screen{display:none;text-align:center;padding:60px 24px;}
+#success-screen .ic{font-size:3.5rem;margin-bottom:16px;}
+#success-screen h2{font-family:'Syne',sans-serif;font-size:1.3rem;font-weight:800;margin-bottom:10px;}
+#success-screen p{font-size:0.84rem;color:var(--muted);line-height:1.7;margin-bottom:20px;}
+#success-screen .ref{background:var(--card);border:1.5px solid var(--green);border-radius:10px;padding:10px 16px;font-family:'Syne',sans-serif;font-weight:700;color:var(--green);display:inline-block;margin-bottom:20px;}
+.wa-btn{display:inline-block;padding:13px 24px;background:#25D366;border-radius:11px;color:#000;font-family:'Syne',sans-serif;font-weight:800;font-size:0.85rem;text-decoration:none;}
+</style>
+</head>
+<body>
+
+<div class="topnav">
+  <button class="back-btn" onclick="window.location.href='index.html'">←</button>
+  <div class="logo">Ride<span>Naija</span></div>
+</div>
+
+<div id="reg-screen">
+  <div class="hero">
+    <div class="hero-icon">🏪</div>
+    <h1>Become a RideNaija <em>Partner</em></h1>
+    <p>RideNaija helps businesses increase sales by connecting them with more customers while we handle delivery. Takes about 3–5 minutes.</p>
+  </div>
+
+  <div class="content">
+    <div class="section-title">SECTION A: BUSINESS INFORMATION</div>
+    <div class="form-group"><label>Business Name *</label><input type="text" id="p-bizname" placeholder="e.g. Mama Sarah Kitchen"/></div>
+    <div class="form-group"><label>Owner/Manager's Full Name *</label><input type="text" id="p-owner" placeholder="Your full name"/></div>
+    <div class="form-group"><label>Phone Number *</label><input type="tel" id="p-phone" placeholder="080..."/></div>
+    <div class="form-group"><label>WhatsApp Number *</label><input type="tel" id="p-whatsapp" placeholder="080..."/></div>
+    <div class="form-group"><label>Business Address *</label><input type="text" id="p-address" placeholder="Street, area"/></div>
+    <div class="form-group"><label>Landmark (Optional)</label><input type="text" id="p-landmark" placeholder="Near..."/></div>
+
+    <div class="section-title">SECTION B: BUSINESS DETAILS</div>
+    <div class="form-group"><label>What category best describes your business? *</label>
+      <select id="p-category">
+        <option value="">Select category</option>
+        <option>Restaurant</option><option>Fast Food</option><option>Home Kitchen</option>
+        <option>Small Chops</option><option>Bakery</option><option>Cake Vendor</option>
+        <option>Supermarket</option><option>Grocery Store</option><option>Pharmacy</option>
+        <option>Fashion</option><option>Electronics</option><option>Beauty/Cosmetics</option>
+        <option>Gift Shop</option><option>Service Provider</option><option>Other</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Briefly describe what you sell *</label><textarea id="p-desc" placeholder="e.g. Jollof rice, small chops, fried rice for events" style="min-height:60px;"></textarea></div>
+    <div class="form-group"><label>Business Opening Time *</label><input type="text" id="p-open" placeholder="e.g. 8:00 AM"/></div>
+    <div class="form-group"><label>Business Closing Time *</label><input type="text" id="p-close" placeholder="e.g. 9:00 PM"/></div>
+    <div class="form-group"><label>Do you currently offer delivery? *</label>
+      <div class="radio-row">
+        <label class="radio-opt"><input type="radio" name="p-hasdelivery" value="Yes"/><span>Yes</span></label>
+        <label class="radio-opt"><input type="radio" name="p-hasdelivery" value="No"/><span>No</span></label>
+      </div>
+    </div>
+
+    <div class="section-title">SECTION C: PARTNERSHIP PREFERENCES</div>
+    <div class="form-group"><label>Are you interested in using RideNaija for deliveries? *</label>
+      <div class="radio-row">
+        <label class="radio-opt"><input type="radio" name="p-wantdelivery" value="Yes"/><span>Yes</span></label>
+        <label class="radio-opt"><input type="radio" name="p-wantdelivery" value="No"/><span>No</span></label>
+      </div>
+    </div>
+    <div class="form-group"><label>Which areas do you usually serve? *</label>
+      <div class="check-row" id="p-areas-row">
+        <label class="check-opt"><input type="checkbox" value="Suleja Town"/><span>Suleja Town</span></label>
+        <label class="check-opt"><input type="checkbox" value="Madalla"/><span>Madalla</span></label>
+        <label class="check-opt"><input type="checkbox" value="Chaza"/><span>Chaza</span></label>
+        <label class="check-opt"><input type="checkbox" value="Maje"/><span>Maje</span></label>
+        <label class="check-opt"><input type="checkbox" value="Kwamba"/><span>Kwamba</span></label>
+        <label class="check-opt"><input type="checkbox" value="PDP Quarters"/><span>PDP Quarters</span></label>
+        <label class="check-opt"><input type="checkbox" value="APC Quarters"/><span>APC Quarters</span></label>
+        <label class="check-opt"><input type="checkbox" value="Kaduna Road"/><span>Kaduna Road</span></label>
+        <label class="check-opt"><input type="checkbox" value="Anywhere within Suleja"/><span>Anywhere within Suleja</span></label>
+      </div>
+    </div>
+    <div class="form-group"><label>Other area (optional)</label><input type="text" id="p-area-other" placeholder="If not listed above"/></div>
+    <div class="form-group"><label>Preferred method for receiving customer orders *</label>
+      <div class="radio-row">
+        <label class="radio-opt"><input type="radio" name="p-ordermethod" value="Through RideNaija"/><span>Through RideNaija</span></label>
+        <label class="radio-opt"><input type="radio" name="p-ordermethod" value="Customers contact me directly"/><span>Customers contact me directly</span></label>
+        <label class="radio-opt"><input type="radio" name="p-ordermethod" value="Both"/><span>Both</span></label>
+      </div>
+    </div>
+    <div class="form-group"><label>Would you like RideNaija to feature your business in our Marketplace? *</label>
+      <div class="radio-row">
+        <label class="radio-opt"><input type="radio" name="p-marketplace" value="Yes"/><span>Yes</span></label>
+        <label class="radio-opt"><input type="radio" name="p-marketplace" value="No"/><span>No</span></label>
+      </div>
+    </div>
+
+    <div class="section-title">SECTION C2: MARKET SHOP (OPTIONAL)</div>
+    <div class="form-group"><label>Do you have a shop/stall in a physical market? *</label>
+      <div class="radio-row">
+        <label class="radio-opt"><input type="radio" name="p-hasmarketshop" value="Yes" onchange="toggleMarketShopFields(true)"/><span>Yes</span></label>
+        <label class="radio-opt"><input type="radio" name="p-hasmarketshop" value="No" onchange="toggleMarketShopFields(false)"/><span>No</span></label>
+      </div>
+    </div>
+    <div id="p-marketshop-fields" style="display:none;">
+      <div class="form-group"><label>Market Name *</label><input type="text" id="p-market-name" placeholder="e.g. IBB Market, Suleja"/></div>
+      <div class="form-group"><label>Line / Row (if your market has one)</label><input type="text" id="p-market-line" placeholder="e.g. Kano Line"/></div>
+      <div class="form-group"><label>Shop Number *</label><input type="text" id="p-market-shopno" placeholder="e.g. Shop 3"/></div>
+    </div>
+
+    <div class="section-title">SECTION D: TERMS AND CONDITIONS</div>
+    <div class="agreement-box">
+      <b style="color:var(--text);">RIDENAIJA VENDOR AGREEMENT</b><br/>By becoming a RideNaija Partner, I agree that:
+      <ul>
+        <li>The information I provided is correct.</li>
+        <li>I will treat customers respectfully.</li>
+        <li>I will provide quality products and services.</li>
+        <li>I will prepare confirmed orders on time.</li>
+        <li>I will keep my prices accurate and updated.</li>
+        <li>I understand that RideNaija coordinates deliveries.</li>
+        <li>I will cooperate with RideNaija riders and staff.</li>
+        <li>I understand that repeated misconduct may result in suspension or removal from the RideNaija Partner Network.</li>
+      </ul>
+    </div>
+    <div class="form-group"><label>Do you agree to the Terms and Conditions? *</label>
+      <div class="radio-row">
+        <label class="radio-opt"><input type="radio" name="p-agree-terms" value="Yes"/><span>Yes</span></label>
+        <label class="radio-opt"><input type="radio" name="p-agree-terms" value="No"/><span>No</span></label>
+      </div>
+    </div>
+    <div class="form-group"><label>Digital Signature (Full Name) *</label><input type="text" id="p-signature" placeholder="Type your full name"/></div>
+
+    <div class="section-title">SECTION E: FINAL VERIFICATION</div>
+    <div class="verify-note">
+      To complete your registration, kindly send the following to our WhatsApp: <b>08120715812</b>
+      <ul style="margin-left:16px;margin-top:6px;">
+        <li>3–5 clear photos of your products or business premises.</li>
+        <li>Use your <b>Business Name</b> as the message caption.</li>
+      </ul>
+      <div style="margin-top:8px;">Once received, our team will review your application and contact you within <b>24–48 hours</b>.</div>
+    </div>
+    <div class="form-group">
+      <label class="radio-opt" style="align-items:flex-start;">
+        <input type="checkbox" id="p-read-instructions" style="margin-top:3px;"/>
+        <span>Yes, I will send my business photos to RideNaija WhatsApp after submitting this form</span>
+      </label>
+    </div>
+
+    <button class="submit-btn" onclick="submitPartnerApplication()">Submit Application</button>
+    <div class="err-msg" id="p-err"></div>
+  </div>
+</div>
+
+<div id="success-screen">
+  <div class="ic">✅</div>
+  <h2>Application Submitted!</h2>
+  <p>Thank you for applying to become a RideNaija Partner. Our team will review your application and reach out within 24–48 hours.</p>
+  <div class="ref" id="success-ref"></div>
+  <p>Don't forget to send your business photos to our WhatsApp to complete verification:</p>
+  <a class="wa-btn" id="wa-link" href="#" target="_blank">💬 Send Photos on WhatsApp</a>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),3000);
+}
+
+function getRadioValue(name){
+  const el = document.querySelector('input[name="'+name+'"]:checked');
+  return el ? el.value : '';
+}
+
+function toggleMarketShopFields(show){
+  document.getElementById('p-marketshop-fields').style.display = show ? 'block' : 'none';
+}
+
+function submitPartnerApplication(){
+  const bizname = document.getElementById('p-bizname').value.trim();
+  const owner = document.getElementById('p-owner').value.trim();
+  const phone = document.getElementById('p-phone').value.trim();
+  const whatsapp = document.getElementById('p-whatsapp').value.trim();
+  const address = document.getElementById('p-address').value.trim();
+  const category = document.getElementById('p-category').value;
+  const desc = document.getElementById('p-desc').value.trim();
+  const openTime = document.getElementById('p-open').value.trim();
+  const closeTime = document.getElementById('p-close').value.trim();
+  const hasDelivery = getRadioValue('p-hasdelivery');
+  const wantDelivery = getRadioValue('p-wantdelivery');
+  const orderMethod = getRadioValue('p-ordermethod');
+  const marketplace = getRadioValue('p-marketplace');
+  const hasMarketShop = getRadioValue('p-hasmarketshop');
+  const marketName = document.getElementById('p-market-name').value.trim();
+  const marketLine = document.getElementById('p-market-line').value.trim();
+  const marketShopNo = document.getElementById('p-market-shopno').value.trim();
+  const agreeTerms = getRadioValue('p-agree-terms');
+  const signature = document.getElementById('p-signature').value.trim();
+  const readInstructions = document.getElementById('p-read-instructions').checked;
+  const areas = Array.from(document.querySelectorAll('#p-areas-row input:checked')).map(function(el){ return el.value; });
+  const areaOther = document.getElementById('p-area-other').value.trim();
+  if(areaOther) areas.push(areaOther);
+
+  const errEl = document.getElementById('p-err');
+  if(!bizname||!owner||phone.length<10||whatsapp.length<10||!address||!category||!desc||!openTime||!closeTime
+     ||!hasDelivery||!wantDelivery||!areas.length||!orderMethod||!marketplace||!hasMarketShop||!agreeTerms||!signature||!readInstructions){
+    errEl.textContent = '⚠️ Please fill in all required fields (*) and confirm you\'ll send your business photos.';
+    errEl.style.display = 'block';
+    window.scrollTo(0,0);
+    return;
+  }
+  if(hasMarketShop==='Yes' && (!marketName || !marketShopNo)){
+    errEl.textContent = '⚠️ Please enter your Market Name and Shop Number.';
+    errEl.style.display = 'block';
+    window.scrollTo(0,0);
+    return;
+  }
+  if(agreeTerms === 'No'){
+    errEl.textContent = '⚠️ You must agree to the Terms and Conditions to register as a partner.';
+    errEl.style.display = 'block';
+    return;
+  }
+  errEl.style.display = 'none';
+
+  const ref = 'RN-PARTNER-'+Date.now();
+  const data = {
+    businessName: bizname, ownerName: owner, phone: phone, whatsapp: whatsapp,
+    address: address, landmark: document.getElementById('p-landmark').value.trim(),
+    category: category, description: desc,
+    openTime: openTime, closeTime: closeTime,
+    hasDelivery: hasDelivery, wantDelivery: wantDelivery,
+    areas: areas, orderMethod: orderMethod, marketplace: marketplace,
+    hasMarketShop: hasMarketShop, marketName: marketName, marketLine: marketLine, marketShopNo: marketShopNo,
+    signature: signature,
+    status: 'pending',
+    submittedAt: new Date().toISOString(),
+    ref: ref
+  };
+
+  function showSuccess(){
+    document.getElementById('reg-screen').style.display = 'none';
+    document.getElementById('success-screen').style.display = 'block';
+    document.getElementById('success-ref').textContent = ref;
+    document.getElementById('wa-link').href = 'https://wa.me/2348120715812?text=' + encodeURIComponent('Hello RideNaija! Here are my business photos for verification.\nBusiness Name: '+bizname);
+  }
+
+  if(window.fbReady && window._db){
+    const newRef = window._push(window._ref(window._db,'partner_applications'));
+    window._set(newRef, data).then(showSuccess).catch(function(e){
+      errEl.textContent = '❌ Could not submit: '+e.message+'. Please try again.';
+      errEl.style.display = 'block';
+    });
+  } else {
+    errEl.textContent = '⚠️ Not connected yet — please try again in a moment.';
+    errEl.style.display = 'block';
+  }
+}
+</script>
+</body>
+</html>

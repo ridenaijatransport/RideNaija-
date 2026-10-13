@@ -33,6 +33,10 @@
     "restaurants":               { ".read": true, ".write": true },
     "fcm_tokens":                { ".read": true, ".write": true },
     "presence":                  { ".read": true, ".write": true },
-    "logistics_settings":        { ".read": true, ".write": true }
+    "logistics_settings":        { ".read": true, ".write": true },
+    "counters":                  { ".read": true, ".write": true },
+    "partner_applications":      { ".read": true, ".write": true },
+    "area_pairs":                { ".read": true, ".write": true },
+    "shops":                     { ".read": true, ".write": true }
   }
 }

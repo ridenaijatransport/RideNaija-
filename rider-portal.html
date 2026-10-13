@@ -1019,7 +1019,7 @@ function bookingCard(b,isActive){
   const riderOwed=isCash?fare:Math.floor(fare*getCommSplit().rider);
   const t=new Date(b.time);
   const timeStr=isNaN(t)?b.time:t.toLocaleDateString('en-NG',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
-  const isDeliveryType = b.source==='delivery_partner'||b.source==='market_order'||b.source==='food_order'||b.source==='parcel_intake'||b.type==='market';
+  const isDeliveryType = b.source==='delivery_partner'||b.source==='market_order'||b.source==='food_order'||b.source==='parcel_intake'||b.source==='delivery_request'||b.type==='market';
   const dStage = b.deliveryStage||'order_placed';
   const deliveryProgressHtml = (isActive && isDeliveryType) ? `
     <div class="bc-actions" style="margin-top:6px;flex-direction:column;gap:6px;background:rgba(79,158,255,0.06);border:1px solid rgba(79,158,255,0.2);border-radius:9px;padding:10px;">
@@ -1174,7 +1174,7 @@ function renderDeliveryLog(bookings){
   if(!summaryEl || !listEl) return;
 
   const delivered = bookings.filter(function(b){
-    return b.source==='parcel_intake' && (b.rideStatus==='completed'||b.rideStatus==='delivered');
+    return (b.source==='parcel_intake' || b.source==='delivery_request') && (b.rideStatus==='completed'||b.rideStatus==='delivered');
   }).sort(function(a,b){ return new Date(b.time||0) - new Date(a.time||0); });
 
   const bonusRate = (window.FB_LOGISTICS_SETTINGS && window.FB_LOGISTICS_SETTINGS.parcelBonusPerDelivery) || 200;
@@ -1189,6 +1189,7 @@ function renderDeliveryLog(bookings){
     + '<div><div style="font-size:0.62rem;color:var(--muted);">This week</div><div style="font-family:\'Syne\',sans-serif;font-size:1.3rem;font-weight:800;color:#4f9eff;">' + thisWeek.length + ' delivered</div></div>'
     + '<div style="text-align:right;"><div style="font-size:0.62rem;color:var(--muted);">Estimated bonus</div><div style="font-family:\'Syne\',sans-serif;font-size:1.3rem;font-weight:800;color:var(--green);">₦' + weekEstimate.toLocaleString() + '</div></div>'
     + '</div>'
+    + '<div style="text-align:center;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);"><span style="font-size:0.62rem;color:var(--muted);">All-time total: </span><span style="font-family:\'Syne\',sans-serif;font-weight:800;color:var(--text);">' + delivered.length + ' deliveries</span></div>'
     + '<div style="font-size:0.62rem;color:var(--muted);margin-top:8px;text-align:center;">₦' + bonusRate.toLocaleString() + ' per delivery · estimate for your reference — confirm actual payout with your owner</div>';
 
   if(!delivered.length){

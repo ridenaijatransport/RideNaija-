@@ -138,6 +138,10 @@
       if(window.refreshAppsUI) window.refreshAppsUI();
       if(window.refreshStatsUI) window.refreshStatsUI();
     });
+    db.ref('partner_applications').on('value', function(snap) {
+      window.FB_PARTNER_APPS = snap.val() ? Object.entries(snap.val()).map(function(e){return Object.assign({},e[1],{fbKey:e[0]});}) : [];
+      if(window.loadPartnerApps) window.loadPartnerApps();
+    });
     db.ref('dedicated_bookings').on('value', function(snap) {
       window.FB_DEDICATED = snap.val() ? Object.entries(snap.val()).map(function(e){return Object.assign({},e[1],{fbKey:e[0]});}).reverse() : [];
       if(typeof loadDedicated === 'function') loadDedicated();
@@ -183,6 +187,10 @@
         if(typeof loadPricing==='function') setTimeout(loadPricing, 400);
       }
     });
+    db.ref('area_pairs').on('value', function(snap) {
+      localStorage.setItem('rn_area_pairs', JSON.stringify(snap.val() || []));
+      if(typeof loadAreaPairs==='function') setTimeout(loadAreaPairs, 200);
+    });
     db.ref('comm_settings').on('value', function(snap) {
       if(snap.val()){
         window.FB_COMM = snap.val();
@@ -224,6 +232,13 @@
     db.ref('restaurants').on('value', function(snap) {
       window.FB_RESTAURANTS = snap.val() ? Object.entries(snap.val()).map(function(e){ return Object.assign({},e[1],{fbKey:e[0]}); }) : [];
       if(typeof loadRestaurantManager==='function') loadRestaurantManager();
+    });
+    // Marketplace shops (Market → Line → Shop Number) — created on partner
+    // application approval when the applicant has a physical market shop.
+    // No dedicated admin screen yet; this just keeps the data flowing in
+    // so later phases (self-service catalog, customer browse) have it.
+    db.ref('shops').on('value', function(snap) {
+      window.FB_SHOPS = snap.val() ? Object.entries(snap.val()).map(function(e){ return Object.assign({},e[1],{fbKey:e[0]}); }) : [];
     });
     db.ref('settlements').on('value', function(snap) {
       window.FB_SETTLEMENTS = snap.val() || {};
@@ -779,8 +794,11 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
               <div class="pricing-note" style="border-color:rgba(249,115,22,0.25);margin-bottom:10px;">What you charge per market order (on top of the items cost). Shown to customer in order summary.</div>
               <div class="pf-grid">
                 <div class="pf-item"><div class="pf-label">Shopping Fee (per order)</div><div class="pf-input-wrap"><span class="pf-currency">₦</span><input class="pf-input" id="market_shopping_fee" type="number" value="300"/></div></div>
-                <div class="pf-item"><div class="pf-label">Delivery Fee (per order)</div><div class="pf-input-wrap"><span class="pf-currency">₦</span><input class="pf-input" id="market_delivery_fee" type="number" value="500"/></div></div>
               </div>
+              <div class="pricing-note" style="margin-top:8px;font-size:0.68rem;">
+                📍 <strong>Delivery fee is no longer set here.</strong> It's now calculated automatically from real distance between the market and the delivery address — same system as Delivery and Food. Manage known routes in the Area Distance Table below.
+              </div>
+              <input type="hidden" id="market_delivery_fee" value="500"/>
             </div>
 
         <button class="save-pricing-btn" onclick="savePricing()">💾 Save All Prices → Live in App</button>
@@ -1075,14 +1093,22 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
         <div style="font-size:0.72rem;color:var(--muted);margin-bottom:8px;line-height:1.5;">Tap <strong style="color:var(--green);">"Confirm Ride Completed"</strong> for cash rides when customer arrives. Card rides appear in Revenue tab → Confirmed Completions for payment.</div>
         <div id="bookings-list"></div>
       </div>
-      <!-- Hidden elements to prevent JS errors from removed section -->
-      <span id="pending-pay-count" style="display:none;"></span>
-      <div id="pending-payment-list" style="display:none;"></div>
     </div>
 
     <!-- ══ PARCELS TAB (Jiji/Temu/3rd-party parcel intake → dispatch to company riders) ══ -->
     <div class="tab-panel" id="tab-parcels">
       <div style="height:8px;"></div>
+
+      <!-- PARTNER APPLICATIONS — reviewed here since this tab already covers
+           business-onboarding tools (parcels, logistics riders). Approving
+           an application creates their PIN AND auto-fills a Marketplace/Shop
+           vendor record from what they already submitted, so they don't
+           have to re-type their business info in the Menu tab. -->
+      <div style="background:var(--card);border:1px solid rgba(0,184,101,0.3);border-radius:14px;padding:14px;margin-bottom:14px;">
+        <div style="font-family:'Syne',sans-serif;font-size:0.88rem;font-weight:800;margin-bottom:8px;">🏪 Partner Applications <span id="partner-apps-badge" style="display:none;background:#f97316;color:#fff;border-radius:10px;padding:1px 7px;font-size:0.6rem;font-weight:800;margin-left:2px;">0</span></div>
+        <div style="font-size:0.72rem;color:var(--muted);line-height:1.6;margin-bottom:10px;">Businesses that applied through the Partner Registration form. Approve to assign them a login PIN, or decline.</div>
+        <div id="partner-apps-list"><div style="text-align:center;padding:16px;color:var(--muted);font-size:0.78rem;">Loading applications...</div></div>
+      </div>
 
       <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:14px;">
         <div style="font-family:'Syne',sans-serif;font-size:0.88rem;font-weight:800;margin-bottom:8px;">📦 Parcel Intake</div>
@@ -1163,6 +1189,23 @@ Temu | | Chuka Eze | 08059876543 | 5 Ademola St, VI | 800" style="width:100%;pad
           <div class="rc-item" style="border-top:1px solid rgba(0,0,0,0.15);margin-top:6px;padding-top:6px;">Card cuts owed to riders (<span id="rev-rider-pct">90</span>%): <span id="rev-owed-riders" style="color:#1a6b3c;font-weight:700;">₦0</span></div>
           <div class="rc-item">Cash cuts + subs owed to you: <span id="rev-owed-you" style="color:#1a6b3c;font-weight:700;">₦0</span></div>
           <div class="rc-item" style="border-top:1px solid rgba(0,0,0,0.15);margin-top:6px;padding-top:6px;font-weight:800;">Net position this week: <span id="rev-net-position" style="font-weight:900;">₦0</span></div>
+        </div>
+      </div>
+
+      <!-- DELIVERY / FOOD / MARKET REVENUE — separate record-keeping, doesn't
+           touch or recompute anything in the ride commission card above.
+           Every order counted here has its own tracking ID already. -->
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <div style="font-family:'Syne',sans-serif;font-size:0.88rem;font-weight:800;">📦 Delivery, Food & Market Revenue</div>
+          <div style="display:flex;gap:6px;">
+            <button id="dfm-rev-week-btn" onclick="setDfmRevPeriod('week')" style="padding:5px 10px;border-radius:7px;background:var(--green);color:#000;font-weight:700;border:none;font-size:0.68rem;">Week</button>
+            <button id="dfm-rev-month-btn" onclick="setDfmRevPeriod('month')" style="padding:5px 10px;border-radius:7px;background:var(--card2);color:var(--muted);font-weight:700;border:none;font-size:0.68rem;">Month</button>
+          </div>
+        </div>
+        <div style="font-size:0.68rem;color:var(--muted);margin-bottom:12px;" id="dfm-rev-period-label">This week</div>
+        <div id="dfm-rev-summary">
+          <div style="text-align:center;padding:12px;color:var(--muted);font-size:0.78rem;">Loading…</div>
         </div>
       </div>
 
@@ -1924,13 +1967,13 @@ function switchTab(name){
   if(name==='partners'){ setTimeout(loadPartnerSummary, 300); setTimeout(loadMarketOrders, 400); }
   event.target.classList.add('active');
   if(name==='bookings'){ loadBookings(); loadRestaurantPayables(); }
-  if(name==='parcels') loadParcels();
+  if(name==='parcels'){ loadParcels(); if(window.loadPartnerApps) window.loadPartnerApps(); }
   if(name==='dedicated') loadDedicated();
   if(name==='withdrawals') loadWithdrawals();
   if(name==='fleet') loadFleet();
   if(name==='riders') loadRiders();
   if(name==='applications') loadApplications();
-  if(name==='revenue') { loadRevenue(); setTimeout(loadRiderSubTable, 800); }
+  if(name==='revenue') { loadRevenue(); setTimeout(loadRiderSubTable, 800); renderDfmRevenue(); }
   if(name==='settings') loadSettings();
   if(name==='pricing') loadPricing();
 }
@@ -2120,6 +2163,11 @@ function saveAreaPair(){
   if(exists){ showToast('This area pair already exists'); return; }
   pairs.push({from:from, to:to, zone:zone});
   localStorage.setItem('rn_area_pairs', JSON.stringify(pairs));
+  // Sync to Firebase so every customer/rider device sees this route pair,
+  // not just this admin browser.
+  if(window.fbReady && window._db){
+    window._set(window._ref(window._db,'area_pairs'), pairs);
+  }
   document.getElementById('ap-from').value='';
   document.getElementById('ap-to').value='';
   loadAreaPairs();
@@ -2130,6 +2178,9 @@ function deleteAreaPair(idx){
   var pairs = JSON.parse(localStorage.getItem('rn_area_pairs')||'[]');
   pairs.splice(idx,1);
   localStorage.setItem('rn_area_pairs', JSON.stringify(pairs));
+  if(window.fbReady && window._db){
+    window._set(window._ref(window._db,'area_pairs'), pairs);
+  }
   loadAreaPairs();
   showToast('Pair removed.');
 }
@@ -2261,19 +2312,47 @@ function loadRiders(){
   const fbRiders = (window.FB_RIDERS||[]).filter(r=>r.status==='verified');
   const localRiders = JSON.parse(localStorage.getItem('rn_v_riders')||'[]');
   const riders = fbRiders.length > 0 ? fbRiders : localRiders;
+  const presence = window.FB_RIDER_PRESENCE || {};
 
-  document.getElementById('riders-count').textContent = riders.length+' total';
+  // Online riders first, so the ones you can actually dispatch to right
+  // now are at the top of the list instead of mixed in alphabetically.
+  const sorted = riders.slice().sort((a,b)=>{
+    const aOn = presence[a.fbKey]?.online ? 1 : 0;
+    const bOn = presence[b.fbKey]?.online ? 1 : 0;
+    return bOn - aOn;
+  });
+  const onlineCount = sorted.filter(r=>presence[r.fbKey]?.online).length;
+
+  document.getElementById('riders-count').textContent = riders.length+' total · '+onlineCount+' online now';
   const list = document.getElementById('riders-list');
   if(!riders.length){
     list.innerHTML='<div class="empty-box"><div class="ico">🏍️</div><p>No riders yet. Approve applications to add riders.</p></div>';
     return;
   }
-  list.innerHTML = riders.map((r,i) => `
+  list.innerHTML = sorted.map((r,i) => {
+    const p = presence[r.fbKey];
+    const isOnline = !!(p && p.online);
+    let statusBadge;
+    if(isOnline){
+      statusBadge = '<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(0,184,101,0.15);border:1px solid var(--green);border-radius:12px;padding:2px 8px;font-size:0.6rem;font-weight:700;color:var(--green);">🟢 Online now</span>';
+    } else {
+      const lastSeenMs = p && p.lastSeen;
+      let lastSeenStr = 'Never opened app';
+      if(lastSeenMs){
+        const mins = Math.floor((Date.now()-lastSeenMs)/60000);
+        if(mins < 60) lastSeenStr = mins+'m ago';
+        else if(mins < 1440) lastSeenStr = Math.floor(mins/60)+'h ago';
+        else lastSeenStr = Math.floor(mins/1440)+'d ago';
+      }
+      statusBadge = '<span style="display:inline-flex;align-items:center;gap:4px;background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:2px 8px;font-size:0.6rem;font-weight:700;color:var(--muted);">⚫ Offline · '+lastSeenStr+'</span>';
+    }
+    return `
     <div class="rider-item" style="flex-direction:column;align-items:flex-start;gap:10px;">
       <div style="display:flex;align-items:center;gap:11px;width:100%;">
         <div class="ri-av">${r.emoji||'👨🏿'}</div>
         <div class="ri-inf">
           <div class="ri-nm">${r.name||'Rider'} ${r.riderType==='company' ? '<span style="background:rgba(79,158,255,0.15);border:1px solid #4f9eff;border-radius:12px;padding:2px 8px;font-size:0.6rem;font-weight:700;color:#4f9eff;margin-left:6px;vertical-align:middle;">🏢 Company</span>' : ''}</div>
+          <div style="margin:4px 0;">${statusBadge}</div>
           <div class="ri-meta">
             <span>${(r.vehicleType||r.type||'okada')==='royal'?'Cargo Truck':(r.vehicleType||r.type||'okada')} ${r.plate?'· '+r.plate:''}</span>
             <span>📞 ${r.phone||'—'}</span>
@@ -2309,7 +2388,8 @@ function loadRiders(){
           💾 Save Routes & ETA
         </button>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function saveRiderRoutes(i, fbKey){
@@ -2855,122 +2935,6 @@ function loadBookings(){
   if(tabBadge){tabBadge.textContent=actionCount;tabBadge.style.display=actionCount>0?'inline':'none';}
 
   document.getElementById('bookings-count').textContent = bks.length+' total';
-
-  // Pending payment = card/transfer rides that are completed but rider not paid yet
-  const pendingPay = bks.filter(b => 
-    (b.payMethod==='Card'||b.payMethod==='Transfer'||b.payMethod==='card'||b.payMethod==='transfer') 
-    && b.rideStatus==='completed' 
-    && !b.riderPaid
-  );
-
-  document.getElementById('pending-pay-count').textContent = pendingPay.length ? pendingPay.length+' need payment' : '✅ All clear';
-
-  // Group pending payments by rider — accordion style
-  const pendList = document.getElementById('pending-payment-list');
-  if(!pendingPay.length){
-    pendList.innerHTML = '<div class="empty-box" style="padding:16px;text-align:center;"><p style="font-size:0.78rem;color:var(--green);">✅ No pending rider payments this week.</p></div>';
-  } else {
-    // Group by rider name
-    const byRider = {};
-    pendingPay.forEach(b=>{
-      const rKey = (b.riderName||'Unknown Rider').trim();
-      if(!byRider[rKey]) byRider[rKey] = {rides:[], phone:b.riderPhone||''};
-      byRider[rKey].rides.push(b);
-    });
-
-    pendList.innerHTML = `
-      <div style="background:rgba(255,214,64,0.06);border:1px solid rgba(255,214,64,0.2);border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:0.72rem;color:var(--muted);line-height:1.6;">
-        💡 These are <strong style="color:var(--text);">card/transfer rides</strong> where the customer already paid via Paystack but the rider hasn't received their 90% yet. Tap each rider to see details and mark as paid.
-      </div>
-      `+Object.entries(byRider).map(([riderName, data], idx)=>{
-        const _fCutPP = getFoodCut();
-        const _defDelFeePP = (JSON.parse(localStorage.getItem('rn_pricing')||'{}').market_delivery_fee)||500;
-        const riderOwed = data.rides.reduce((s,b)=>{
-          const isFoodMkt = b.source==='food_order'||b.source==='market_order'||b.type==='market';
-          return s+(isFoodMkt
-            ? Math.floor((b.deliveryFee||_defDelFeePP)*_fCutPP.rider/100)
-            : Math.floor((b.fare||0)*getCommSplit().rider));
-        },0);
-        const totalFare  = data.rides.reduce((s,b)=>s+(b.fare||0),0);
-        const ownerEarns = data.rides.reduce((s,b)=>{
-          const isFoodMkt = b.source==='food_order'||b.source==='market_order'||b.type==='market';
-          return s+(isFoodMkt
-            ? Math.floor((b.deliveryFee||_defDelFeePP)*_fCutPP.owner/100)
-            : Math.floor((b.fare||0)*getCommSplit().owner));
-        },0);
-        const rideCount  = data.rides.length;
-        return `
-        <div style="background:var(--card2);border:1.5px solid rgba(255,214,64,0.25);border-radius:12px;margin-bottom:8px;overflow:hidden;">
-
-          <!-- ACCORDION HEADER — tap to expand -->
-          <div onclick="toggleAccordion('acc-${idx}')" style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;cursor:pointer;">
-            <div>
-              <div style="font-family:'Syne',sans-serif;font-size:0.85rem;font-weight:800;">${riderName}</div>
-              <div style="font-size:0.66rem;color:var(--muted);margin-top:2px;">${rideCount} ride${rideCount!==1?'s':''} · Pay rider: <strong style="color:var(--green);">₦${riderOwed.toLocaleString()}</strong> · Your cut: <strong style="color:var(--yellow);">₦${ownerEarns.toLocaleString()}</strong></div>
-            </div>
-            <div style="font-size:0.7rem;font-weight:700;padding:4px 10px;border-radius:20px;background:rgba(255,214,64,0.15);color:var(--yellow);" id="acc-chevron-${idx}">▼ Show</div>
-          </div>
-
-          <!-- ACCORDION BODY — hidden by default -->
-          <div id="acc-${idx}" style="display:none;padding:0 12px 12px;">
-
-            <!-- RIDE LIST -->
-            ${data.rides.map((b,ri)=>{
-              const rShare = Math.floor((b.fare||0)*getCommSplit().rider);
-              const oCut   = Math.floor((b.fare||0)*getCommSplit().owner);
-              const t = new Date(b.time||b.timestamp||0);
-              const tStr = isNaN(t)?'—':t.toLocaleDateString('en-NG',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
-              return `
-              <div style="background:var(--card);border-radius:9px;padding:9px;margin-bottom:7px;">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-                  <span style="font-size:0.7rem;font-weight:700;">${b.pickup||'—'} → ${b.destination||'—'}</span>
-                  <span style="font-size:0.62rem;color:var(--muted);">${tStr}</span>
-                </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:7px;">
-                  <div style="text-align:center;background:var(--card2);border-radius:7px;padding:5px;">
-                    <div style="font-size:0.65rem;color:var(--muted);">Fare</div>
-                    <div style="font-family:'Syne',sans-serif;font-size:0.78rem;font-weight:700;">₦${(b.fare||0).toLocaleString()}</div>
-                  </div>
-                  <div style="text-align:center;background:rgba(0,184,101,0.07);border-radius:7px;padding:5px;">
-                    <div style="font-size:0.65rem;color:var(--muted);">Rider <span class="comm-rider-pct-dyn">90</span>%</div>
-                    <div style="font-family:'Syne',sans-serif;font-size:0.78rem;font-weight:700;color:var(--green);">₦${rShare.toLocaleString()}</div>
-                  </div>
-                  <div style="text-align:center;background:rgba(255,214,64,0.07);border-radius:7px;padding:5px;">
-                    <div style="font-size:0.65rem;color:var(--muted);">Your <span class="comm-owner-pct-dyn">10</span>%</div>
-                    <div style="font-family:'Syne',sans-serif;font-size:0.78rem;font-weight:700;color:var(--yellow);">₦${oCut.toLocaleString()}</div>
-                  </div>
-                </div>
-                <div style="font-size:0.64rem;color:var(--muted);">📞 ${b.phone||'—'} · 💳 ${b.payMethod||'—'}</div>
-              </div>`;
-            }).join('')}
-
-            <!-- TOTAL + ACTIONS -->
-            <div style="background:rgba(0,184,101,0.08);border:1px solid rgba(0,184,101,0.2);border-radius:9px;padding:10px;margin-top:4px;margin-bottom:10px;">
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;text-align:center;margin-bottom:8px;">
-                <div>
-                  <div style="font-size:0.62rem;color:var(--muted);">Total to pay ${riderName}</div>
-                  <div style="font-family:'Syne',sans-serif;font-size:1rem;font-weight:800;color:var(--green);">₦${riderOwed.toLocaleString()}</div>
-                </div>
-                <div>
-                  <div style="font-size:0.62rem;color:var(--muted);">Your total cut</div>
-                  <div style="font-family:'Syne',sans-serif;font-size:1rem;font-weight:800;color:var(--yellow);">₦${ownerEarns.toLocaleString()}</div>
-                </div>
-              </div>
-              <div style="display:flex;gap:7px;">
-                <button onclick="markAllRiderPaid(${JSON.stringify(data.rides.map(b=>b.id||b.fbKey))},'${riderName}')" 
-                  style="flex:1;padding:9px;border-radius:9px;font-family:'Syne',sans-serif;font-weight:700;font-size:0.72rem;cursor:pointer;border:none;background:var(--green);color:#000;">
-                  ✅ Mark All Paid — ${riderName}
-                </button>
-                <a href="https://wa.me/${(data.phone||'').replace(/^0/,'234')}?text=${encodeURIComponent('Hello '+riderName+'! Your RideNaija card ride payment of ₦'+riderOwed.toLocaleString()+' for '+rideCount+' ride'+(rideCount!==1?'s':'')+' is ready. We will transfer to you shortly. Thank you! 🙏')}" target="_blank"
-                  style="flex:1;padding:9px;border-radius:9px;font-family:'Syne',sans-serif;font-weight:700;font-size:0.72rem;cursor:pointer;border:1px solid var(--green);background:transparent;color:var(--green);text-align:center;text-decoration:none;">
-                  💬 WhatsApp
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>`;
-      }).join('');
-  }
 
   // All bookings list
   const list = document.getElementById('bookings-list');
@@ -3698,6 +3662,75 @@ function sendSubReminder(name, phone, amount, youPay, cashCuts, cardCuts, subOwe
   window.open('https://wa.me/'+num+'?text='+encodeURIComponent(msg),'_blank');
 }
 
+// ═══════════════════════════════════════════════════════════
+// DELIVERY / FOOD / MARKET REVENUE — a completely separate read of
+// window.FB_BOOKINGS, filtered by source and date range. Doesn't touch or
+// depend on anything in loadRevenue() below, so it can never throw off the
+// existing ride commission numbers.
+// ═══════════════════════════════════════════════════════════
+window._dfmRevPeriod = 'week';
+
+function setDfmRevPeriod(period){
+  window._dfmRevPeriod = period;
+  document.getElementById('dfm-rev-week-btn').style.background = period==='week' ? 'var(--green)' : 'var(--card2)';
+  document.getElementById('dfm-rev-week-btn').style.color = period==='week' ? '#000' : 'var(--muted)';
+  document.getElementById('dfm-rev-month-btn').style.background = period==='month' ? 'var(--green)' : 'var(--card2)';
+  document.getElementById('dfm-rev-month-btn').style.color = period==='month' ? '#000' : 'var(--muted)';
+  document.getElementById('dfm-rev-period-label').textContent = period==='week' ? 'This week' : 'This month';
+  renderDfmRevenue();
+}
+
+function renderDfmRevenue(){
+  var summaryEl = document.getElementById('dfm-rev-summary');
+  if(!summaryEl) return;
+  var bookings = window.FB_BOOKINGS || [];
+
+  var now = new Date();
+  var cutoff;
+  if(window._dfmRevPeriod === 'week'){
+    cutoff = new Date(now); cutoff.setDate(now.getDate() - now.getDay()); cutoff.setHours(0,0,0,0);
+  } else {
+    cutoff = new Date(now.getFullYear(), now.getMonth(), 1);
+  }
+
+  var types = [
+    { key: 'delivery_request', label: '📦 Delivery', icon: '📦' },
+    { key: 'food_order',       label: '🍽️ Food',     icon: '🍽️' },
+    { key: 'market_order',     label: '🛒 Market',    icon: '🛒' },
+    { key: 'parcel_intake',    label: '📮 Parcels',   icon: '📮' }
+  ];
+
+  var grandTotal = 0, grandCount = 0;
+  var rowsHtml = types.map(function(t){
+    var matches = bookings.filter(function(b){
+      var matchesSource = b.source===t.key || (t.key==='market_order' && b.type==='market');
+      if(!matchesSource) return false;
+      var isDone = b.rideStatus==='completed' || b.rideStatus==='delivered' || b.isPaid;
+      if(!isDone) return false;
+      var t2 = new Date(b.time||0);
+      return t2 >= cutoff;
+    });
+    var count = matches.length;
+    var feeTotal = matches.reduce(function(s,b){ return s + (b.deliveryFee || 0); }, 0);
+    grandTotal += feeTotal;
+    grandCount += count;
+    return { label: t.label, count: count, fee: feeTotal };
+  });
+
+  summaryEl.innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border);">'
+    + '<div><div style="font-size:0.62rem;color:var(--muted);">Completed orders</div><div style="font-family:\'Syne\',sans-serif;font-size:1.3rem;font-weight:800;">'+grandCount+'</div></div>'
+    + '<div style="text-align:right;"><div style="font-size:0.62rem;color:var(--muted);">Delivery fee revenue</div><div style="font-family:\'Syne\',sans-serif;font-size:1.3rem;font-weight:800;color:var(--green);">₦'+grandTotal.toLocaleString()+'</div></div>'
+    + '</div>'
+    + rowsHtml.map(function(r){
+        return '<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:0.8rem;">'
+          + '<span>'+r.label+' <span style="color:var(--muted);font-size:0.7rem;">('+r.count+')</span></span>'
+          + '<span style="font-weight:700;">₦'+r.fee.toLocaleString()+'</span>'
+          + '</div>';
+      }).join('')
+    + '<div style="font-size:0.62rem;color:var(--muted);margin-top:8px;">Note: this counts the delivery fee collected on each order, not the item cost itself — that money passes through to the vendor/shopper, not platform revenue.</div>';
+}
+
 function loadRevenue(){
   window.refreshRevenueUI = function(){ loadRevenue(); };  // register so Firebase updates trigger this
   // Helper: match names even if order is reversed e.g. "Ibrahim Mohammed" vs "Mohammed Ibrahim"
@@ -4166,6 +4199,116 @@ function logBatchParcels(){
     document.getElementById('pcl-batch-input').value = '';
     loadParcels();
   });
+}
+
+// ═══════════════════════════════════════════════════════════
+// PARTNER APPLICATIONS — reviewed the same way rider applications already
+// are. Approving does two things at once: creates their login PIN (same
+// partner_pins system partner-portal.html already uses) AND auto-creates
+// their restaurants/ vendor record from what they already told us in the
+// form, so they land straight in the Menu tab with their business already
+// set up — no re-typing anything.
+// ═══════════════════════════════════════════════════════════
+window.loadPartnerApps = function(){
+  var listEl = document.getElementById('partner-apps-list');
+  var badgeEl = document.getElementById('partner-apps-badge');
+  if(!listEl) return;
+  var apps = (window.FB_PARTNER_APPS || []).filter(function(a){ return a.status==='pending' || !a.status; });
+
+  if(badgeEl){ badgeEl.style.display = apps.length ? 'inline-block' : 'none'; badgeEl.textContent = apps.length; }
+
+  if(!apps.length){
+    listEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--muted);font-size:0.78rem;">No pending applications.</div>';
+    return;
+  }
+
+  listEl.innerHTML = apps.map(function(a){
+    var areasStr = (a.areas||[]).join(', ') || '—';
+    var marketShopLine = (a.hasMarketShop==='Yes')
+      ? '<br/>🏪 <strong style="color:var(--green);">Market shop:</strong> '+(a.marketName||'—')+(a.marketLine?' · '+a.marketLine:'')+' · Shop '+(a.marketShopNo||'—')
+      : '';
+    return '<div style="background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px;">'
+      + '<div style="font-weight:700;font-size:0.85rem;margin-bottom:4px;">'+(a.businessName||'—')+' <span style="font-weight:400;color:var(--muted);font-size:0.7rem;">('+(a.category||'—')+')</span></div>'
+      + '<div style="font-size:0.74rem;color:var(--muted);line-height:1.7;">'
+      + '👤 '+(a.ownerName||'—')+' &nbsp;·&nbsp; 📞 '+(a.phone||'—')+' &nbsp;·&nbsp; 📱 '+(a.whatsapp||a.phone||'—')+'<br/>'
+      + '📍 '+(a.address||'—')+(a.landmark?' ('+a.landmark+')':'')+'<br/>'
+      + '🕐 '+(a.openTime||'—')+' – '+(a.closeTime||'—')+' &nbsp;·&nbsp; 🚚 Has delivery: '+(a.hasDelivery||'—')+'<br/>'
+      + '🗺️ Serves: '+areasStr
+      + marketShopLine+'<br/>'
+      + '📝 '+(a.description||'—')
+      + '</div>'
+      + '<div style="display:flex;gap:8px;margin-top:10px;">'
+      + '<button onclick="approvePartnerApp(\''+a.fbKey+'\')" style="flex:1;padding:9px;border-radius:7px;background:var(--green);color:#000;font-weight:700;border:none;font-size:0.74rem;">✅ Approve & Add</button>'
+      + '<button onclick="contactPartnerWhatsApp(\''+(a.whatsapp||a.phone||'')+'\',\''+(a.businessName||'')+'\')" style="padding:9px 12px;border-radius:7px;background:#25D366;color:#000;font-weight:700;border:none;font-size:0.74rem;">💬</button>'
+      + '<button onclick="declinePartnerApp(\''+a.fbKey+'\')" style="padding:9px 12px;border-radius:7px;background:rgba(255,79,79,0.15);color:#ff4f4f;font-weight:700;border:1px solid #ff4f4f;font-size:0.74rem;">❌</button>'
+      + '</div>'
+      + '</div>';
+  }).join('');
+};
+
+function contactPartnerWhatsApp(phone,name){
+  const msg=encodeURIComponent('Hello '+name+', your RideNaija Partner application has been received. Please send 3-5 clear photos of your products or business premises, using your business name as the caption, to complete verification. Thank you!');
+  const num=phone.replace(/^0/,'234').replace(/\s/g,'');
+  window.open('https://wa.me/'+num+'?text='+msg,'_blank');
+}
+
+function approvePartnerApp(fbKey){
+  var app = (window.FB_PARTNER_APPS||[]).find(function(a){ return a.fbKey===fbKey; });
+  if(!app) return;
+  var pin = prompt('Set a login PIN for '+app.businessName+' (they\'ll use this + their business name to log into the Partner Portal):', String(Math.floor(1000+Math.random()*9000)));
+  if(!pin) return;
+
+  var isMarketShop = app.hasMarketShop === 'Yes';
+  // Market-shop applicants get partnerType 'shop' so the Partner Portal
+  // shows them a product catalog editor instead of a restaurant menu
+  // editor, once that screen exists (Phase 2 of the marketplace build).
+  var partnerType = isMarketShop ? 'shop'
+    : (app.category==='Restaurant'||app.category==='Fast Food'||app.category==='Home Kitchen'||app.category==='Small Chops'||app.category==='Bakery'||app.category==='Cake Vendor') ? 'restaurant' : 'business';
+  var vendorCategory = (partnerType==='restaurant') ? 'Food' : (app.category==='Supermarket'||app.category==='Grocery Store'||app.category==='Pharmacy') ? 'Groceries' : (app.category==='Fashion') ? 'Fashion' : (app.category==='Electronics') ? 'Electronics' : 'Other';
+
+  // 1. Create their partner login PIN
+  var pinPromise = window._push(window._ref(window._db,'partner_pins'), {
+    name: app.businessName, pin: pin, type: partnerType, created: new Date().toISOString()
+  });
+
+  // 2. Auto-create their Marketplace/Shop vendor record from what they already told us
+  var vendorPromise = (app.marketplace==='Yes' || app.wantDelivery==='Yes')
+    ? window._push(window._ref(window._db,'restaurants'), {
+        name: app.businessName, emoji: '🏪', category: vendorCategory,
+        location: app.address, phone: app.phone, deliveryFee: 1000,
+        state: '', menu: {}, active: true, created: new Date().toISOString()
+      })
+    : Promise.resolve();
+
+  // 3. Market-shop applicants also get a record under shops/ — the
+  // Market → Line → Shop Number structure the marketplace browse screen
+  // (Phase 3) will read from. Kept as a flat node with plain string
+  // fields, same pragmatic pattern as restaurants/ above, rather than a
+  // nested market/line tree — far simpler to query and matches how the
+  // rest of this codebase already does location data.
+  var shopPromise = isMarketShop
+    ? window._push(window._ref(window._db,'shops'), {
+        marketName: app.marketName, lineName: app.marketLine||'', shopNumber: app.marketShopNo,
+        shopName: app.businessName, sells: app.description,
+        ownerName: app.ownerName, phone: app.phone, whatsapp: app.whatsapp||app.phone,
+        pin: pin, status: 'active', products: {}, created: new Date().toISOString()
+      })
+    : Promise.resolve();
+
+  Promise.all([pinPromise, vendorPromise, shopPromise]).then(function(){
+    window._update(window._ref(window._db,'partner_applications/'+fbKey), { status:'approved' });
+    showToast('✅ '+app.businessName+' approved! PIN: '+pin+(isMarketShop?' · Shop added to '+app.marketName:''));
+  }).catch(function(e){
+    showToast('❌ Could not approve: '+e.message);
+  });
+}
+
+function declinePartnerApp(fbKey){
+  var app = (window.FB_PARTNER_APPS||[]).find(function(a){ return a.fbKey===fbKey; });
+  if(!app) return;
+  if(!confirm('Decline '+app.businessName+'\'s application?')) return;
+  window._update(window._ref(window._db,'partner_applications/'+fbKey), { status:'rejected' });
+  showToast('Application declined');
 }
 
 function saveLogisticsBonusRate(){
