@@ -54,9 +54,26 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 .form-group select option{background:#111;}
 
 .radio-row,.check-row{display:flex;flex-direction:column;gap:8px;}
-.radio-opt,.check-opt{display:flex;align-items:center;gap:10px;background:var(--card2);border:1.5px solid var(--border);border-radius:9px;padding:11px 13px;cursor:pointer;}
-.radio-opt input,.check-opt input{width:auto;accent-color:var(--green);}
+.radio-opt,.check-opt{display:flex;align-items:center;gap:10px;background:var(--card2);border:1.5px solid var(--border);border-radius:9px;padding:11px 13px;cursor:pointer;transition:border-color 0.15s,background 0.15s;}
+/* The actual <input> stays in the DOM (so existing querySelector/checked
+   logic in submitPartnerApplication() needs zero changes) but is visually
+   hidden — the checked/selected look is driven entirely by the .on class
+   below, toggled explicitly in JS on tap. Native radio/checkbox rendering
+   was proving unreliable inside some Android WebView wrappers (visual
+   state flashing or reverting on tap), so this sidesteps that completely
+   by never depending on the browser's own widget paint — same pattern
+   already used for payment-method selectors elsewhere in this app. */
+.radio-opt input,.check-opt input{position:absolute;opacity:0;width:0;height:0;pointer-events:none;}
 .radio-opt span,.check-opt span{font-size:0.84rem;}
+.radio-opt .dot,.check-opt .box{flex-shrink:0;width:19px;height:19px;border:1.5px solid var(--border);background:var(--card);transition:all 0.15s;}
+.radio-opt .dot{border-radius:50%;}
+.radio-opt .dot::after{content:'';display:block;width:9px;height:9px;margin:4px auto 0;border-radius:50%;background:var(--green);opacity:0;transition:opacity 0.15s;}
+.check-opt .box{border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:0.72rem;color:#000;}
+.radio-opt.on,.check-opt.on{border-color:var(--green);background:rgba(0,184,101,0.08);}
+.radio-opt.on .dot{border-color:var(--green);}
+.radio-opt.on .dot::after{opacity:1;}
+.check-opt.on .box{border-color:var(--green);background:var(--green);}
+.check-opt.on .box::after{content:'✓';}
 
 .agreement-box{background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:14px;font-size:0.76rem;color:var(--muted);line-height:1.8;margin-bottom:14px;}
 .agreement-box li{margin-left:16px;margin-bottom:4px;}
@@ -117,51 +134,51 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
     <div class="form-group"><label>Business Closing Time *</label><input type="text" id="p-close" placeholder="e.g. 9:00 PM"/></div>
     <div class="form-group"><label>Do you currently offer delivery? *</label>
       <div class="radio-row">
-        <label class="radio-opt"><input type="radio" name="p-hasdelivery" value="Yes"/><span>Yes</span></label>
-        <label class="radio-opt"><input type="radio" name="p-hasdelivery" value="No"/><span>No</span></label>
+        <label class="radio-opt" data-name="p-hasdelivery" onclick="selRadio(event,this,'p-hasdelivery')"><input type="radio" name="p-hasdelivery" value="Yes"/><span class="dot"></span><span>Yes</span></label>
+        <label class="radio-opt" data-name="p-hasdelivery" onclick="selRadio(event,this,'p-hasdelivery')"><input type="radio" name="p-hasdelivery" value="No"/><span class="dot"></span><span>No</span></label>
       </div>
     </div>
 
     <div class="section-title">SECTION C: PARTNERSHIP PREFERENCES</div>
     <div class="form-group"><label>Are you interested in using RideNaija for deliveries? *</label>
       <div class="radio-row">
-        <label class="radio-opt"><input type="radio" name="p-wantdelivery" value="Yes"/><span>Yes</span></label>
-        <label class="radio-opt"><input type="radio" name="p-wantdelivery" value="No"/><span>No</span></label>
+        <label class="radio-opt" data-name="p-wantdelivery" onclick="selRadio(event,this,'p-wantdelivery')"><input type="radio" name="p-wantdelivery" value="Yes"/><span class="dot"></span><span>Yes</span></label>
+        <label class="radio-opt" data-name="p-wantdelivery" onclick="selRadio(event,this,'p-wantdelivery')"><input type="radio" name="p-wantdelivery" value="No"/><span class="dot"></span><span>No</span></label>
       </div>
     </div>
     <div class="form-group"><label>Which areas do you usually serve? *</label>
       <div class="check-row" id="p-areas-row">
-        <label class="check-opt"><input type="checkbox" value="Suleja Town"/><span>Suleja Town</span></label>
-        <label class="check-opt"><input type="checkbox" value="Madalla"/><span>Madalla</span></label>
-        <label class="check-opt"><input type="checkbox" value="Chaza"/><span>Chaza</span></label>
-        <label class="check-opt"><input type="checkbox" value="Maje"/><span>Maje</span></label>
-        <label class="check-opt"><input type="checkbox" value="Kwamba"/><span>Kwamba</span></label>
-        <label class="check-opt"><input type="checkbox" value="PDP Quarters"/><span>PDP Quarters</span></label>
-        <label class="check-opt"><input type="checkbox" value="APC Quarters"/><span>APC Quarters</span></label>
-        <label class="check-opt"><input type="checkbox" value="Kaduna Road"/><span>Kaduna Road</span></label>
-        <label class="check-opt"><input type="checkbox" value="Anywhere within Suleja"/><span>Anywhere within Suleja</span></label>
+        <label class="check-opt" onclick="selCheck(event,this)"><input type="checkbox" value="Suleja Town"/><span class="box"></span><span>Suleja Town</span></label>
+        <label class="check-opt" onclick="selCheck(event,this)"><input type="checkbox" value="Madalla"/><span class="box"></span><span>Madalla</span></label>
+        <label class="check-opt" onclick="selCheck(event,this)"><input type="checkbox" value="Chaza"/><span class="box"></span><span>Chaza</span></label>
+        <label class="check-opt" onclick="selCheck(event,this)"><input type="checkbox" value="Maje"/><span class="box"></span><span>Maje</span></label>
+        <label class="check-opt" onclick="selCheck(event,this)"><input type="checkbox" value="Kwamba"/><span class="box"></span><span>Kwamba</span></label>
+        <label class="check-opt" onclick="selCheck(event,this)"><input type="checkbox" value="PDP Quarters"/><span class="box"></span><span>PDP Quarters</span></label>
+        <label class="check-opt" onclick="selCheck(event,this)"><input type="checkbox" value="APC Quarters"/><span class="box"></span><span>APC Quarters</span></label>
+        <label class="check-opt" onclick="selCheck(event,this)"><input type="checkbox" value="Kaduna Road"/><span class="box"></span><span>Kaduna Road</span></label>
+        <label class="check-opt" onclick="selCheck(event,this)"><input type="checkbox" value="Anywhere within Suleja"/><span class="box"></span><span>Anywhere within Suleja</span></label>
       </div>
     </div>
     <div class="form-group"><label>Other area (optional)</label><input type="text" id="p-area-other" placeholder="If not listed above"/></div>
     <div class="form-group"><label>Preferred method for receiving customer orders *</label>
       <div class="radio-row">
-        <label class="radio-opt"><input type="radio" name="p-ordermethod" value="Through RideNaija"/><span>Through RideNaija</span></label>
-        <label class="radio-opt"><input type="radio" name="p-ordermethod" value="Customers contact me directly"/><span>Customers contact me directly</span></label>
-        <label class="radio-opt"><input type="radio" name="p-ordermethod" value="Both"/><span>Both</span></label>
+        <label class="radio-opt" data-name="p-ordermethod" onclick="selRadio(event,this,'p-ordermethod')"><input type="radio" name="p-ordermethod" value="Through RideNaija"/><span class="dot"></span><span>Through RideNaija</span></label>
+        <label class="radio-opt" data-name="p-ordermethod" onclick="selRadio(event,this,'p-ordermethod')"><input type="radio" name="p-ordermethod" value="Customers contact me directly"/><span class="dot"></span><span>Customers contact me directly</span></label>
+        <label class="radio-opt" data-name="p-ordermethod" onclick="selRadio(event,this,'p-ordermethod')"><input type="radio" name="p-ordermethod" value="Both"/><span class="dot"></span><span>Both</span></label>
       </div>
     </div>
     <div class="form-group"><label>Would you like RideNaija to feature your business in our Marketplace? *</label>
       <div class="radio-row">
-        <label class="radio-opt"><input type="radio" name="p-marketplace" value="Yes"/><span>Yes</span></label>
-        <label class="radio-opt"><input type="radio" name="p-marketplace" value="No"/><span>No</span></label>
+        <label class="radio-opt" data-name="p-marketplace" onclick="selRadio(event,this,'p-marketplace')"><input type="radio" name="p-marketplace" value="Yes"/><span class="dot"></span><span>Yes</span></label>
+        <label class="radio-opt" data-name="p-marketplace" onclick="selRadio(event,this,'p-marketplace')"><input type="radio" name="p-marketplace" value="No"/><span class="dot"></span><span>No</span></label>
       </div>
     </div>
 
     <div class="section-title">SECTION C2: MARKET SHOP (OPTIONAL)</div>
     <div class="form-group"><label>Do you have a shop/stall in a physical market? *</label>
       <div class="radio-row">
-        <label class="radio-opt"><input type="radio" name="p-hasmarketshop" value="Yes" onchange="toggleMarketShopFields(true)"/><span>Yes</span></label>
-        <label class="radio-opt"><input type="radio" name="p-hasmarketshop" value="No" onchange="toggleMarketShopFields(false)"/><span>No</span></label>
+        <label class="radio-opt" data-name="p-hasmarketshop" onclick="selRadio(event,this,'p-hasmarketshop');toggleMarketShopFields(true)"><input type="radio" name="p-hasmarketshop" value="Yes"/><span class="dot"></span><span>Yes</span></label>
+        <label class="radio-opt" data-name="p-hasmarketshop" onclick="selRadio(event,this,'p-hasmarketshop');toggleMarketShopFields(false)"><input type="radio" name="p-hasmarketshop" value="No"/><span class="dot"></span><span>No</span></label>
       </div>
     </div>
     <div id="p-marketshop-fields" style="display:none;">
@@ -186,8 +203,8 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
     </div>
     <div class="form-group"><label>Do you agree to the Terms and Conditions? *</label>
       <div class="radio-row">
-        <label class="radio-opt"><input type="radio" name="p-agree-terms" value="Yes"/><span>Yes</span></label>
-        <label class="radio-opt"><input type="radio" name="p-agree-terms" value="No"/><span>No</span></label>
+        <label class="radio-opt" data-name="p-agree-terms" onclick="selRadio(event,this,'p-agree-terms')"><input type="radio" name="p-agree-terms" value="Yes"/><span class="dot"></span><span>Yes</span></label>
+        <label class="radio-opt" data-name="p-agree-terms" onclick="selRadio(event,this,'p-agree-terms')"><input type="radio" name="p-agree-terms" value="No"/><span class="dot"></span><span>No</span></label>
       </div>
     </div>
     <div class="form-group"><label>Digital Signature (Full Name) *</label><input type="text" id="p-signature" placeholder="Type your full name"/></div>
@@ -202,8 +219,9 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
       <div style="margin-top:8px;">Once received, our team will review your application and contact you within <b>24–48 hours</b>.</div>
     </div>
     <div class="form-group">
-      <label class="radio-opt" style="align-items:flex-start;">
-        <input type="checkbox" id="p-read-instructions" style="margin-top:3px;"/>
+      <label class="check-opt" style="align-items:flex-start;" onclick="selCheck(event,this)">
+        <input type="checkbox" id="p-read-instructions"/>
+        <span class="box" style="margin-top:2px;"></span>
         <span>Yes, I will send my business photos to RideNaija WhatsApp after submitting this form</span>
       </label>
     </div>
@@ -238,6 +256,27 @@ function getRadioValue(name){
 
 function toggleMarketShopFields(show){
   document.getElementById('p-marketshop-fields').style.display = show ? 'block' : 'none';
+}
+
+// Explicit, JS-driven selection state for every radio/checkbox on this
+// form. preventDefault() blocks the browser's own native label→input
+// click forwarding, so this code is the ONLY thing ever setting .checked
+// — no race between native widget behavior and our own state, which is
+// what was causing selections to flicker/revert in some WebView wrappers.
+function selRadio(e, el, name){
+  e.preventDefault();
+  document.querySelectorAll('.radio-opt[data-name="'+name+'"]').forEach(function(l){
+    l.classList.remove('on');
+    l.querySelector('input').checked = false;
+  });
+  el.classList.add('on');
+  el.querySelector('input').checked = true;
+}
+function selCheck(e, el){
+  e.preventDefault();
+  var input = el.querySelector('input');
+  input.checked = !input.checked;
+  el.classList.toggle('on', input.checked);
 }
 
 function submitPartnerApplication(){
