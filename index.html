@@ -5590,11 +5590,16 @@ function renderMarketsBrowse(){
     }
     listEl.innerHTML = shopsHere.map(function(s){
       var itemCount = s.products ? Object.keys(s.products).length : 0;
-      return '<div class="food-rst-card" onclick="openShopDetail(\''+s.fbKey+'\')" style="cursor:pointer;padding:14px;">'
+      var thumbHtml = s.logoUrl
+        ? '<img src="'+s.logoUrl+'" alt="" style="width:100%;height:100%;object-fit:cover;">'
+        : '<span style="font-size:1.8rem;">🏪</span>';
+      return '<div class="food-rst-card" onclick="openShopDetail(\''+s.fbKey+'\')" style="cursor:pointer;padding:12px;display:flex;align-items:center;gap:12px;">'
+        +'<div style="width:54px;height:54px;flex-shrink:0;border-radius:10px;overflow:hidden;background:var(--card2);display:flex;align-items:center;justify-content:center;">'+thumbHtml+'</div>'
+        +'<div style="flex:1;min-width:0;">'
         +'<div class="food-rst-name">Shop '+(s.shopNumber||'—')+': '+s.shopName+'</div>'
         +'<div class="food-rst-loc">'+(s.sells||'')+'</div>'
-        +'<div style="font-size:0.68rem;color:var(--muted);margin-top:6px;">'+itemCount+' item'+(itemCount!==1?'s':'')+' · Tap to view →</div>'
-        +'</div>';
+        +'<div style="font-size:0.68rem;color:var(--muted);margin-top:4px;">'+itemCount+' item'+(itemCount!==1?'s':'')+' · Tap to view →</div>'
+        +'</div></div>';
     }).join('');
     return;
   }
@@ -5701,7 +5706,9 @@ function openShopDetail(shopKey){
   window._openVendorKey = null;
 
   document.getElementById('vendor-detail-name').textContent = s.shopName;
-  document.getElementById('vendor-detail-banner').innerHTML = '<span>🏪</span>';
+  document.getElementById('vendor-detail-banner').innerHTML = s.logoUrl
+    ? '<img src="'+s.logoUrl+'" alt="" style="width:100%;height:100%;object-fit:cover;">'
+    : '<span>🏪</span>';
   document.getElementById('vendor-detail-meta').innerHTML =
     '<div style="font-size:0.8rem;color:var(--muted);">📍 '+s.marketName+(s.lineName?' · '+s.lineName:'')+' · Shop '+s.shopNumber+'</div>'
     +(s.sells?'<div style="font-size:0.76rem;color:var(--muted);margin-top:3px;">'+s.sells+'</div>':'');
@@ -5723,25 +5730,28 @@ function renderShopDetailItems(s){
     itemsEl.innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted);font-size:0.8rem;">Nothing listed yet — check back soon.</div>';
     return;
   }
-  itemsEl.innerHTML = products.map(function(m){
+  // Catalog-style grid, not a text row with a small side thumbnail — the
+  // photo is the dominant element of each card (full card width, square),
+  // matching how a real marketplace product grid looks rather than a list.
+  itemsEl.innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">' + products.map(function(m){
     var item = m[1]; var mKey = m[0];
     var cartRst = foodCart[s.fbKey];
     var existing = cartRst ? cartRst.items.find(function(i){ return i.mKey===mKey; }) : null;
     var qty = existing ? existing.qty : 0;
     var thumbHtml = item.photoUrl
       ? '<img src="'+item.photoUrl+'" alt="" style="width:100%;height:100%;object-fit:cover;">'
-      : '<span style="font-size:2.6rem;">'+(item.emoji||'🛍️')+'</span>';
-    return '<div style="display:flex;gap:12px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:10px;margin-bottom:12px;align-items:center;">'
-      +'<div style="width:110px;height:110px;flex-shrink:0;border-radius:10px;overflow:hidden;background:var(--card2);display:flex;align-items:center;justify-content:center;">'+thumbHtml+'</div>'
-      +'<div style="flex:1;min-width:0;">'
-      +'<div style="font-weight:700;font-size:0.9rem;margin-bottom:4px;">'+item.name+'</div>'
-      +'<div style="font-family:\'Syne\',sans-serif;font-weight:800;color:var(--green);font-size:0.95rem;margin-bottom:8px;">₦'+parseInt(item.price).toLocaleString()+'</div>'
-      +'<div class="fmi-qty">'
+      : '<span style="font-size:3rem;">'+(item.emoji||'🛍️')+'</span>';
+    return '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;">'
+      +'<div style="width:100%;aspect-ratio:1;background:var(--card2);display:flex;align-items:center;justify-content:center;overflow:hidden;">'+thumbHtml+'</div>'
+      +'<div style="padding:10px;flex:1;display:flex;flex-direction:column;">'
+      +'<div style="font-weight:700;font-size:0.8rem;margin-bottom:4px;line-height:1.3;">'+item.name+'</div>'
+      +'<div style="font-family:\'Syne\',sans-serif;font-weight:800;color:var(--green);font-size:0.88rem;margin-bottom:8px;">₦'+parseInt(item.price).toLocaleString()+'</div>'
+      +'<div class="fmi-qty" style="justify-content:space-between;margin-top:auto;">'
       +'<button class="'+(qty>0?'active':'')+'" onclick="foodQty(\''+s.fbKey+'\',\''+mKey+'\',\''+item.name+'\','+item.price+',\''+(item.emoji||'🛍️')+'\',\''+(s.shopName||'')+'\',\''+(s.phone||'')+'\',\''+pickupLoc+'\',1000,-1); refreshShopDetailQty(\''+s.fbKey+'\',\''+mKey+'\')">−</button>'
       +'<span id="fqty-'+s.fbKey+'-'+mKey+'">'+(qty||0)+'</span>'
       +'<button class="'+(qty>0?'active':'')+'" onclick="foodQty(\''+s.fbKey+'\',\''+mKey+'\',\''+item.name+'\','+item.price+',\''+(item.emoji||'🛍️')+'\',\''+(s.shopName||'')+'\',\''+(s.phone||'')+'\',\''+pickupLoc+'\',1000,1); refreshShopDetailQty(\''+s.fbKey+'\',\''+mKey+'\')">+</button>'
       +'</div></div></div>';
-  }).join('');
+  }).join('') + '</div>';
 }
 
 function refreshShopDetailQty(shopKey, mKey){

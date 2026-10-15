@@ -550,6 +550,14 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
       </div>
 
       <div class="form-card" style="margin-bottom:12px;">
+        <div style="font-weight:700;font-size:0.8rem;margin-bottom:6px;">📷 Shop Cover Photo</div>
+        <div style="font-size:0.68rem;color:var(--muted);line-height:1.6;margin-bottom:8px;">Shown as your shop's banner when customers browse your market.</div>
+        <div id="pp-shop-logo-preview" style="width:100%;height:120px;border-radius:10px;background:var(--bg);display:flex;align-items:center;justify-content:center;margin-bottom:8px;overflow:hidden;color:var(--muted);font-size:0.72rem;">No photo set yet</div>
+        <input type="file" id="pp-shop-logo-file" accept="image/*" style="width:100%;font-size:0.72rem;color:var(--muted);">
+        <div id="pp-shop-logo-status" style="font-size:0.65rem;color:var(--muted);margin-top:4px;"></div>
+      </div>
+
+      <div class="form-card" style="margin-bottom:12px;">
         <div style="font-weight:700;font-size:0.8rem;margin-bottom:6px;">📍 Shop Location</div>
         <div style="font-size:0.68rem;color:var(--muted);line-height:1.6;">Set by RideNaija when your shop was approved. Contact us if anything here needs to change.</div>
         <div id="pp-shop-location" style="margin-top:8px;font-size:0.82rem;font-weight:600;">—</div>
@@ -958,9 +966,46 @@ function loadMyShop(){
       return;
     }
     if(locEl) locEl.textContent = shop.marketName + (shop.lineName ? ' · ' + shop.lineName : '') + ' · Shop ' + shop.shopNumber;
+    var logoPreview = document.getElementById('pp-shop-logo-preview');
+    if(logoPreview){
+      logoPreview.innerHTML = shop.logoUrl
+        ? '<img src="'+shop.logoUrl+'" alt="" style="width:100%;height:100%;object-fit:cover;">'
+        : 'No photo set yet';
+    }
     renderMyShopList(shop);
   });
 }
+
+// Shop cover photo upload — same free imgbb pattern as the restaurant
+// logo and per-product photos, uploads the moment a file is picked.
+document.addEventListener('DOMContentLoaded', function(){
+  var shopLogoInput = document.getElementById('pp-shop-logo-file');
+  if(shopLogoInput){
+    shopLogoInput.addEventListener('change', function(){
+      var file = this.files && this.files[0];
+      if(!file) return;
+      var statusEl = document.getElementById('pp-shop-logo-status');
+      function doUpload(){
+        if(statusEl) statusEl.textContent = '⏳ Uploading...';
+        uploadToImgbb(file, function(url, err){
+          if(url){
+            window._db.ref('shops/'+window._myShopKey).update({ logoUrl: url }).then(function(){
+              document.getElementById('pp-shop-logo-preview').innerHTML = '<img src="'+url+'" alt="" style="width:100%;height:100%;object-fit:cover;">';
+              if(statusEl) statusEl.textContent = '✅ Photo updated';
+            });
+          } else {
+            if(statusEl) statusEl.textContent = '⚠️ Upload failed — try again';
+          }
+        });
+      }
+      if(!window._myShopKey){
+        findMyShop(function(shop){ if(shop) doUpload(); else if(statusEl) statusEl.textContent = '❌ No shop record found'; });
+      } else {
+        doUpload();
+      }
+    });
+  }
+});
 
 function renderMyShopList(shop){
   var listEl = document.getElementById('pp-shop-list');
@@ -974,10 +1019,10 @@ function renderMyShopList(shop){
     var item = m[1]; var pKey = m[0];
     var price = parseInt(item.price)||0;
     var thumbHtml = item.photoUrl
-      ? '<img src="'+item.photoUrl+'" alt="" style="width:34px;height:34px;border-radius:8px;object-fit:cover;flex-shrink:0;">'
-      : '<span style="font-size:1.3rem;flex-shrink:0;">'+(item.emoji||'🛍️')+'</span>';
+      ? '<img src="'+item.photoUrl+'" alt="" style="width:56px;height:56px;border-radius:9px;object-fit:cover;flex-shrink:0;">'
+      : '<span style="font-size:1.8rem;flex-shrink:0;width:56px;text-align:center;">'+(item.emoji||'🛍️')+'</span>';
     return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);">'
-      +'<div style="display:flex;align-items:center;gap:8px;min-width:0;">'+thumbHtml+'<span style="font-weight:600;font-size:0.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+item.name+'</span></div>'
+      +'<div style="display:flex;align-items:center;gap:10px;min-width:0;">'+thumbHtml+'<span style="font-weight:600;font-size:0.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+item.name+'</span></div>'
       +'<div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">'
       +'<span style="font-size:0.8rem;color:var(--muted);">₦'+price.toLocaleString()+'</span>'
       +'<button onclick="removeMyShopProduct(\''+pKey+'\')" style="background:none;border:none;color:#e74c3c;font-size:1.1rem;cursor:pointer;padding:4px;">🗑️</button>'
