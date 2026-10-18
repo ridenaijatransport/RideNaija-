@@ -187,6 +187,33 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
       <div class="form-group"><label>Shop Number *</label><input type="text" id="p-market-shopno" placeholder="e.g. Shop 3"/></div>
     </div>
 
+    <div class="section-title">SECTION C3: SERVICE PROVIDER (OPTIONAL)</div>
+    <div class="form-group"><label>Are you a service provider (plumber, tailor, carpenter, electrician, etc.) rather than a shop? *</label>
+      <div class="radio-row">
+        <label class="radio-opt" data-name="p-isservice" onclick="selRadio(event,this,'p-isservice');toggleServiceFields(true)"><input type="radio" name="p-isservice" value="Yes"/><span class="dot"></span><span>Yes</span></label>
+        <label class="radio-opt" data-name="p-isservice" onclick="selRadio(event,this,'p-isservice');toggleServiceFields(false)"><input type="radio" name="p-isservice" value="No"/><span class="dot"></span><span>No</span></label>
+      </div>
+    </div>
+    <div id="p-service-fields" style="display:none;">
+      <div class="form-group"><label>What service do you offer? *</label>
+        <select id="p-service-category">
+          <option value="">Select a category</option>
+          <option value="Plumbing">Plumbing</option>
+          <option value="Electrical">Electrical</option>
+          <option value="Carpentry / Furniture">Carpentry / Furniture</option>
+          <option value="Tailoring">Tailoring</option>
+          <option value="Painting">Painting</option>
+          <option value="Generator Repair">Generator Repair</option>
+          <option value="Phone/Laptop Repair">Phone/Laptop Repair</option>
+          <option value="AC/Fridge Repair">AC/Fridge Repair</option>
+          <option value="Cleaning">Cleaning</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Years of experience</label><input type="text" id="p-service-years" placeholder="e.g. 6 years"/></div>
+      <div class="form-group"><label>Briefly describe your work *</label><textarea id="p-service-bio" rows="3" placeholder="e.g. I fix leaking pipes, install new taps and water tanks..."></textarea></div>
+    </div>
+
     <div class="section-title">SECTION D: TERMS AND CONDITIONS</div>
     <div class="agreement-box">
       <b style="color:var(--text);">RIDENAIJA VENDOR AGREEMENT</b><br/>By becoming a RideNaija Partner, I agree that:
@@ -257,6 +284,9 @@ function getRadioValue(name){
 function toggleMarketShopFields(show){
   document.getElementById('p-marketshop-fields').style.display = show ? 'block' : 'none';
 }
+function toggleServiceFields(show){
+  document.getElementById('p-service-fields').style.display = show ? 'block' : 'none';
+}
 
 // Explicit, JS-driven selection state for every radio/checkbox on this
 // form. preventDefault() blocks the browser's own native label→input
@@ -297,6 +327,10 @@ function submitPartnerApplication(){
   const marketName = document.getElementById('p-market-name').value.trim();
   const marketLine = document.getElementById('p-market-line').value.trim();
   const marketShopNo = document.getElementById('p-market-shopno').value.trim();
+  const isService = getRadioValue('p-isservice');
+  const serviceCategory = document.getElementById('p-service-category').value;
+  const serviceYears = document.getElementById('p-service-years').value.trim();
+  const serviceBio = document.getElementById('p-service-bio').value.trim();
   const agreeTerms = getRadioValue('p-agree-terms');
   const signature = document.getElementById('p-signature').value.trim();
   const readInstructions = document.getElementById('p-read-instructions').checked;
@@ -306,7 +340,7 @@ function submitPartnerApplication(){
 
   const errEl = document.getElementById('p-err');
   if(!bizname||!owner||phone.length<10||whatsapp.length<10||!address||!category||!desc||!openTime||!closeTime
-     ||!hasDelivery||!wantDelivery||!areas.length||!orderMethod||!marketplace||!hasMarketShop||!agreeTerms||!signature||!readInstructions){
+     ||!hasDelivery||!wantDelivery||!areas.length||!orderMethod||!marketplace||!hasMarketShop||!isService||!agreeTerms||!signature||!readInstructions){
     errEl.textContent = '⚠️ Please fill in all required fields (*) and confirm you\'ll send your business photos.';
     errEl.style.display = 'block';
     window.scrollTo(0,0);
@@ -314,6 +348,12 @@ function submitPartnerApplication(){
   }
   if(hasMarketShop==='Yes' && (!marketName || !marketShopNo)){
     errEl.textContent = '⚠️ Please enter your Market Name and Shop Number.';
+    errEl.style.display = 'block';
+    window.scrollTo(0,0);
+    return;
+  }
+  if(isService==='Yes' && (!serviceCategory || !serviceBio)){
+    errEl.textContent = '⚠️ Please select your service category and describe your work.';
     errEl.style.display = 'block';
     window.scrollTo(0,0);
     return;
@@ -334,6 +374,7 @@ function submitPartnerApplication(){
     hasDelivery: hasDelivery, wantDelivery: wantDelivery,
     areas: areas, orderMethod: orderMethod, marketplace: marketplace,
     hasMarketShop: hasMarketShop, marketName: marketName, marketLine: marketLine, marketShopNo: marketShopNo,
+    isService: isService, serviceCategory: serviceCategory, serviceYears: serviceYears, serviceBio: serviceBio,
     signature: signature,
     status: 'pending',
     submittedAt: new Date().toISOString(),

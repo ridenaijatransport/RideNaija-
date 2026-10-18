@@ -271,6 +271,16 @@
       if(typeof renderMarketsBrowse === 'function' && _foodCategoryFilter === 'Markets') renderMarketsBrowse();
     });
 
+    // Load service provider directory (plumbers, tailors, carpenters, etc.)
+    // for the Services browse tab — mirrors the shops listener above.
+    _db.ref('service_providers').on('value', function(snapshot){
+      var data = snapshot.val();
+      window.LIVE_SERVICES = data
+        ? Object.entries(data).map(function(e){ return Object.assign({}, e[1], {fbKey: e[0]}); }).filter(function(s){ return s.status !== 'inactive'; })
+        : [];
+      if(typeof renderServicesBrowse === 'function' && _foodCategoryFilter === 'Services') renderServicesBrowse();
+    });
+
   } catch(e) {
     console.log('Firebase init error:', e);
     window.firebaseReady = false;
@@ -1443,6 +1453,7 @@ input:checked+.slider::before{transform:translateX(18px);}
     <button class="cat-pill" data-cat="Electronics" onclick="setFoodCategoryFilter('Electronics',this)" style="flex-shrink:0;padding:7px 14px;border-radius:20px;border:1px solid var(--border);background:var(--card);color:var(--text);font-weight:700;font-size:0.76rem;white-space:nowrap;">📱 Electronics</button>
     <button class="cat-pill" data-cat="Other" onclick="setFoodCategoryFilter('Other',this)" style="flex-shrink:0;padding:7px 14px;border-radius:20px;border:1px solid var(--border);background:var(--card);color:var(--text);font-weight:700;font-size:0.76rem;white-space:nowrap;">✨ Other</button>
     <button class="cat-pill" data-cat="Markets" onclick="setFoodCategoryFilter('Markets',this)" style="flex-shrink:0;padding:7px 14px;border-radius:20px;border:1px solid var(--border);background:var(--card);color:var(--text);font-weight:700;font-size:0.76rem;white-space:nowrap;">🏪 Markets</button>
+    <button class="cat-pill" data-cat="Services" onclick="setFoodCategoryFilter('Services',this)" style="flex-shrink:0;padding:7px 14px;border-radius:20px;border:1px solid var(--border);background:var(--card);color:var(--text);font-weight:700;font-size:0.76rem;white-space:nowrap;">🛠️ Services</button>
   </div>
 
   <!-- EMPTY STATE (shown until restaurants load) -->
@@ -1467,6 +1478,15 @@ input:checked+.slider::before{transform:translateX(18px);}
     </div>
     <div id="market-breadcrumb" style="display:none;padding:0 16px 10px;font-size:0.76rem;color:var(--muted);"></div>
     <div id="market-browse-list" style="padding:0 16px;"></div>
+  </div>
+
+  <!-- SERVICES BROWSE — Category → Provider → Profile (bio, portfolio
+       photos, Call/WhatsApp). No cart here: service pricing is quote-based
+       and arranged directly between customer and provider. Hidden unless
+       the 🛠️ Services pill is active. -->
+  <div id="services-browse" style="display:none;">
+    <div id="services-breadcrumb" style="display:none;padding:0 16px 10px;font-size:0.76rem;color:var(--muted);"></div>
+    <div id="services-browse-list" style="padding:0 16px;"></div>
   </div>
 </div>
 
@@ -5166,6 +5186,14 @@ function getMktFees(){
   const p = window.FB_FARE_PRICING || window.FB_PRICING || JSON.parse(localStorage.getItem('rn_pricing')||'{}');
   return { shopping: p.market_shopping_fee||300, delivery: p.market_delivery_fee||500 };
 }
+
+// Marketplace shop commission (Market → Line → Shop) — set in admin's
+// Marketplace Shop Commission panel. Separate from delivery fee entirely;
+// this is RideNaija's cut of the item price itself for shop orders only.
+function getMarketplaceCommissionPct(){
+  const p = window.FB_FARE_PRICING || window.FB_PRICING || JSON.parse(localStorage.getItem('rn_pricing')||'{}');
+  return p.marketplace_commission_pct!==undefined ? p.marketplace_commission_pct : 5;
+}
 let mktPayMethod = 'Card';
 
 function setMarketCat(name){
@@ -5472,13 +5500,19 @@ function setFoodCategoryFilter(cat, btnEl){
   });
 
   var isMarkets = cat === 'Markets';
-  document.getElementById('food-rst-list').style.display = isMarkets ? 'none' : '';
+  var isServices = cat === 'Services';
+  document.getElementById('food-rst-list').style.display = (isMarkets||isServices) ? 'none' : '';
   document.getElementById('market-browse').style.display = isMarkets ? 'block' : 'none';
+  document.getElementById('services-browse').style.display = isServices ? 'block' : 'none';
   var emptyEl = document.getElementById('food-empty');
   if(isMarkets){
     if(emptyEl) emptyEl.style.display = 'none';
     _marketBrowse = { level:'markets', market:null, line:null };
     renderMarketsBrowse();
+  } else if(isServices){
+    if(emptyEl) emptyEl.style.display = 'none';
+    _servicesBrowse = { level:'categories', category:null };
+    renderServicesBrowse();
   } else {
     renderFoodTab();
   }
@@ -5665,6 +5699,110 @@ function searchMarketProducts(query){
 }
 
 // ══════════════════════════════════════════
+// SERVICES BROWSE — Category → Provider → Profile. No cart/checkout:
+// service pricing is quote-based, so a customer calls or WhatsApps the
+// provider directly to arrange the job. Reuses the vendor-detail-overlay
+// markup for the profile view, same as Markets reuses it for shops.
+// ══════════════════════════════════════════
+var _servicesBrowse = { level:'categories', category:null };
+
+function renderServicesBrowse(){
+  var providers = window.LIVE_SERVICES || [];
+  var listEl = document.getElementById('services-browse-list');
+  var crumbEl = document.getElementById('services-breadcrumb');
+  if(!listEl) return;
+
+  if(!providers.length){
+    crumbEl.style.display='none';
+    listEl.innerHTML = '<div class="empty-box"><div class="ico">🛠️</div><p>No service providers listed yet.<br/>Check back soon.</p></div>';
+    return;
+  }
+
+  if(_servicesBrowse.level === 'categories'){
+    crumbEl.style.display='none';
+    var cats = Array.from(new Set(providers.map(function(p){ return p.category; }).filter(Boolean)));
+    listEl.innerHTML = cats.map(function(cat){
+      var count = providers.filter(function(p){ return p.category===cat; }).length;
+      return '<div class="food-rst-card" onclick="openServiceCategory(\''+cat.replace(/'/g,"\\'")+'\')" style="cursor:pointer;padding:16px;display:flex;align-items:center;gap:12px;">'
+        +'<span style="font-size:2rem;">🛠️</span>'
+        +'<div style="flex:1;"><div class="food-rst-name">'+cat+'</div><div class="food-rst-loc">'+count+' provider'+(count!==1?'s':'')+'</div></div>'
+        +'<span style="color:var(--muted);">›</span></div>';
+    }).join('');
+    return;
+  }
+
+  if(_servicesBrowse.level === 'providers'){
+    crumbEl.style.display='block';
+    crumbEl.innerHTML = '<span style="color:var(--green);cursor:pointer;" onclick="backToServiceCategories()">🛠️ Services</span> › '+_servicesBrowse.category;
+    var providersHere = providers.filter(function(p){ return p.category===_servicesBrowse.category; });
+    if(!providersHere.length){
+      listEl.innerHTML = '<div class="empty-box"><div class="ico">🛠️</div><p>No providers here yet.</p></div>';
+      return;
+    }
+    listEl.innerHTML = providersHere.map(function(p){
+      var photoCount = p.photos ? Object.keys(p.photos).length : 0;
+      var areasStr = (p.serviceAreas||[]).join(', ') || '—';
+      return '<div class="food-rst-card" onclick="openServiceProfile(\''+p.fbKey+'\')" style="cursor:pointer;padding:14px;">'
+        +'<div class="food-rst-name">'+p.name+(p.yearsExperience?' · '+p.yearsExperience:'')+'</div>'
+        +'<div class="food-rst-loc">Serves: '+areasStr+'</div>'
+        +'<div style="font-size:0.68rem;color:var(--muted);margin-top:6px;">'+photoCount+' portfolio photo'+(photoCount!==1?'s':'')+' · Tap to view →</div>'
+        +'</div>';
+    }).join('');
+    return;
+  }
+}
+
+function openServiceCategory(category){
+  _servicesBrowse = { level:'providers', category:category };
+  renderServicesBrowse();
+}
+
+function backToServiceCategories(){
+  _servicesBrowse = { level:'categories', category:null };
+  renderServicesBrowse();
+}
+
+// Provider profile — reuses the vendor-detail-overlay shell (name/banner/
+// meta/items area) but the "items area" here is bio + portfolio photo
+// grid + big Call/WhatsApp buttons instead of a product grid, since there
+// is nothing to add to a cart.
+window._openServiceKey = null;
+
+function openServiceProfile(key){
+  var p = (window.LIVE_SERVICES||[]).find(function(x){ return x.fbKey===key; });
+  if(!p) return;
+  window._openServiceKey = key;
+  window._openVendorKey = null;
+  window._openShopKey = null;
+
+  document.getElementById('vendor-detail-name').textContent = p.name;
+  document.getElementById('vendor-detail-banner').innerHTML = '<span>🛠️</span>';
+  document.getElementById('vendor-detail-meta').innerHTML =
+    '<div style="font-size:0.8rem;color:var(--muted);">'+p.category+(p.yearsExperience?' · '+p.yearsExperience+' experience':'')+'</div>'
+    +'<div style="font-size:0.76rem;color:var(--muted);margin-top:3px;">📍 Serves: '+((p.serviceAreas||[]).join(', ')||'—')+'</div>';
+
+  var itemsEl = document.getElementById('vendor-detail-items');
+  var photos = p.photos ? Object.entries(p.photos) : [];
+  var photoGrid = photos.length
+    ? '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">'
+      + photos.map(function(ph){ return '<div style="aspect-ratio:1;border-radius:12px;overflow:hidden;background:var(--card2);"><img src="'+ph[1].url+'" alt="" style="width:100%;height:100%;object-fit:cover;"></div>'; }).join('')
+      + '</div>'
+    : '';
+  var waNum = (p.whatsapp||p.phone||'').replace(/^0/,'234').replace(/\s/g,'');
+  itemsEl.innerHTML =
+    (p.bio ? '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:16px;font-size:0.84rem;line-height:1.6;">'+p.bio+'</div>' : '')
+    + photoGrid
+    + '<div style="display:flex;flex-direction:column;gap:10px;">'
+    + '<a href="tel:'+(p.phone||'')+'" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;background:var(--green);border-radius:12px;color:#000;text-decoration:none;font-weight:800;font-family:\'Syne\',sans-serif;">📞 Call '+p.name+'</a>'
+    + '<a href="https://wa.me/'+waNum+'" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;background:var(--card);border:1.5px solid var(--border);border-radius:12px;color:var(--text);text-decoration:none;font-weight:800;font-family:\'Syne\',sans-serif;">💬 WhatsApp</a>'
+    + '</div>'
+    + '<div style="text-align:center;font-size:0.68rem;color:var(--muted);margin-top:12px;">Arrange the job and price directly with '+p.name+'. RideNaija can still deliver materials or tools if needed — just book a Delivery separately.</div>';
+
+  document.getElementById('vendor-detail-overlay').style.display = 'block';
+  document.getElementById('vendor-detail-overlay').scrollTop = 0;
+}
+
+// ══════════════════════════════════════════
 // VENDOR DETAIL PAGE — opened by tapping a vendor card. Shows only that
 // vendor's items, with much bigger photos than the old inline-list view.
 // ══════════════════════════════════════════
@@ -5676,6 +5814,7 @@ function openVendorDetail(rstKey){
   if(!r) return;
   window._openVendorKey = rstKey;
   window._openShopKey = null;
+  window._openServiceKey = null;
 
   document.getElementById('vendor-detail-name').textContent = r.name;
   document.getElementById('vendor-detail-banner').innerHTML = r.logoUrl
@@ -5693,6 +5832,7 @@ function closeVendorDetail(){
   document.getElementById('vendor-detail-overlay').style.display = 'none';
   window._openVendorKey = null;
   window._openShopKey = null;
+  window._openServiceKey = null;
 }
 
 // Shop catalog view — same overlay as the vendor detail page above, just
@@ -5704,6 +5844,7 @@ function openShopDetail(shopKey){
   if(!s) return;
   window._openShopKey = shopKey;
   window._openVendorKey = null;
+  window._openServiceKey = null;
 
   document.getElementById('vendor-detail-name').textContent = s.shopName;
   document.getElementById('vendor-detail-banner').innerHTML = s.logoUrl
@@ -5766,27 +5907,25 @@ function renderVendorDetailItems(r){
     itemsEl.innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted);font-size:0.8rem;">Nothing listed yet — check back soon.</div>';
     return;
   }
-  itemsEl.innerHTML = menu.map(function(m){
+  itemsEl.innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">' + menu.map(function(m){
     var item = m[1]; var mKey = m[0];
     var cartRst = foodCart[r.fbKey];
     var existing = cartRst ? cartRst.items.find(function(i){ return i.mKey===mKey; }) : null;
     var qty = existing ? existing.qty : 0;
     var thumbHtml = item.photoUrl
       ? '<img src="'+item.photoUrl+'" alt="" style="width:100%;height:100%;object-fit:cover;">'
-      : '<span style="font-size:2.6rem;">'+(item.emoji||'🍽️')+'</span>';
-    return '<div style="display:flex;gap:12px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:10px;margin-bottom:12px;align-items:center;">'
-      +'<div style="width:110px;height:110px;flex-shrink:0;border-radius:10px;overflow:hidden;background:var(--card2);display:flex;align-items:center;justify-content:center;">'+thumbHtml+'</div>'
-      +'<div style="flex:1;min-width:0;">'
-      +'<div style="font-weight:700;font-size:0.9rem;margin-bottom:4px;">'+item.name+'</div>'
-      +'<div style="font-family:\'Syne\',sans-serif;font-weight:800;color:var(--green);font-size:0.95rem;margin-bottom:8px;">₦'+parseInt(item.price).toLocaleString()+'</div>'
-      +'<div class="fmi-qty">'
+      : '<span style="font-size:3rem;">'+(item.emoji||'🍽️')+'</span>';
+    return '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;">'
+      +'<div style="width:100%;aspect-ratio:1;background:var(--card2);display:flex;align-items:center;justify-content:center;overflow:hidden;">'+thumbHtml+'</div>'
+      +'<div style="padding:10px;flex:1;display:flex;flex-direction:column;">'
+      +'<div style="font-weight:700;font-size:0.8rem;margin-bottom:4px;line-height:1.3;">'+item.name+'</div>'
+      +'<div style="font-family:\'Syne\',sans-serif;font-weight:800;color:var(--green);font-size:0.88rem;margin-bottom:8px;">₦'+parseInt(item.price).toLocaleString()+'</div>'
+      +'<div class="fmi-qty" style="justify-content:space-between;margin-top:auto;">'
       +'<button class="'+(qty>0?'active':'')+'" onclick="foodQty(\''+r.fbKey+'\',\''+mKey+'\',\''+item.name+'\','+item.price+',\''+(item.emoji||'🍽️')+'\',\''+(r.name||'')+'\',\''+(r.phone||'')+'\',\''+(r.location||'')+'\','+(r.deliveryFee||1000)+',-1); refreshVendorDetailQty(\''+r.fbKey+'\',\''+mKey+'\')">−</button>'
       +'<span id="fqty-'+r.fbKey+'-'+mKey+'">'+(qty||0)+'</span>'
       +'<button class="'+(qty>0?'active':'')+'" onclick="foodQty(\''+r.fbKey+'\',\''+mKey+'\',\''+item.name+'\','+item.price+',\''+(item.emoji||'🍽️')+'\',\''+(r.name||'')+'\',\''+(r.phone||'')+'\',\''+(r.location||'')+'\','+(r.deliveryFee||1000)+',1); refreshVendorDetailQty(\''+r.fbKey+'\',\''+mKey+'\')">+</button>'
-      +'</div>'
-      +'</div>'
-      +'</div>';
-  }).join('');
+      +'</div></div></div>';
+  }).join('') + '</div>';
 }
 
 // After a +/- tap on the detail page, just refresh this one item's qty label
@@ -6325,10 +6464,21 @@ function finalizeFoodOrder(details, paystackRef, btn){
 
   var bkKey = 'FOOD_' + Date.now() + '_' + phone.slice(-4);
   var _isFoodCat = _vendorCategory === 'Food';
+  var _isMarketplace = _vendorCategory === 'Marketplace';
   var _orderLabel = _isFoodCat ? 'Food Order' : (_vendorCategory + ' Order');
   var _orderEmoji = _isFoodCat ? '🍽️' : '🛍️';
+
+  // Marketplace shop commission — RideNaija's cut of the item price itself,
+  // on top of the delivery fee. Only applies to Markets-tab shop orders,
+  // not Food (restaurant) orders, which keep the existing delivery-fee-only
+  // revenue model unchanged.
+  var _commissionPct = _isMarketplace ? getMarketplaceCommissionPct() : 0;
+  var _commission = _isMarketplace ? Math.round(subtotal * _commissionPct / 100) : 0;
+  var _vendorPayout = subtotal - _commission;
+
   var bkData = {
     source: 'food_order',
+    vendorCategory: _vendorCategory,
     restaurantKey: rstKey,
     restaurantName: cart.rstName,
     restaurantPhone: cart.rstPhone,
@@ -6337,6 +6487,9 @@ function finalizeFoodOrder(details, paystackRef, btn){
     cartJson: JSON.stringify(cart.items),
     subtotal: subtotal,
     deliveryFee: realDelFee,
+    commission: _commission,
+    commissionPct: _commissionPct,
+    vendorPayout: _vendorPayout,
     fare: grand,
     destination: addr,
     pickup: cart.rstLocation,

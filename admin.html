@@ -240,6 +240,11 @@
     db.ref('shops').on('value', function(snap) {
       window.FB_SHOPS = snap.val() ? Object.entries(snap.val()).map(function(e){ return Object.assign({},e[1],{fbKey:e[0]}); }) : [];
     });
+    // Service provider directory (plumbers, tailors, carpenters, etc.) —
+    // profile + contact, no cart/checkout. Same listener pattern as shops.
+    db.ref('service_providers').on('value', function(snap) {
+      window.FB_SERVICE_PROVIDERS = snap.val() ? Object.entries(snap.val()).map(function(e){ return Object.assign({},e[1],{fbKey:e[0]}); }) : [];
+    });
     db.ref('settlements').on('value', function(snap) {
       window.FB_SETTLEMENTS = snap.val() || {};
       // Sync Firebase settlements to localStorage so they work offline too
@@ -801,6 +806,23 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
               <input type="hidden" id="market_delivery_fee" value="500"/>
             </div>
 
+            <!-- MARKETPLACE SHOP COMMISSION — this is about the Market → Line →
+                 Shop marketplace feature (shop owners selling their own
+                 products), NOT the Market Order Fees panel above (which is
+                 for the "send someone to buy from the market for me" errand
+                 service). Those are two different things sharing the word
+                 "market" — kept visually separate on purpose. -->
+            <div style="background:var(--card2);border:1.5px solid rgba(0,184,101,0.3);border-radius:13px;padding:12px;margin-bottom:10px;">
+              <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:0.82rem;color:var(--green);margin-bottom:6px;">🏪 Marketplace Shop Commission</div>
+              <div class="pricing-note" style="border-color:rgba(0,184,101,0.3);margin-bottom:10px;">Your cut of each sale from a shop in the Markets browse tab (Market → Line → Shop), on top of the delivery fee. The shop owner receives the rest.</div>
+              <div class="pf-grid">
+                <div class="pf-item"><div class="pf-label">Commission on item price</div><div class="pf-input-wrap"><input class="pf-input" id="marketplace_commission_pct" type="number" min="0" max="100" value="5"/><span class="pf-currency">%</span></div></div>
+              </div>
+              <div class="pricing-note" style="margin-top:8px;font-size:0.68rem;">
+                ⚖️ Keep this modest — too high and shop owners are tempted to arrange repeat sales directly with customers instead of through the app.
+              </div>
+            </div>
+
         <button class="save-pricing-btn" onclick="savePricing()">💾 Save All Prices → Live in App</button>
         </div>
       </div>
@@ -1186,6 +1208,7 @@ Temu | | Chuka Eze | 08059876543 | 5 Ademola St, VI | 800" style="width:100%;pad
           <div class="rc-item">📅 Subscriptions received: <strong><span id="rev-sub">₦0</span></strong></div>
           <div class="rc-item">🍽️ Food delivery cuts: <strong><span id="rev-food-cut">₦0</span></strong></div>
           <div class="rc-item">🛒 Market order cuts: <strong><span id="rev-market-cut">₦0</span></strong></div>
+          <div class="rc-item">🏪 Marketplace shop commission: <strong><span id="rev-marketplace-comm">₦0</span></strong></div>
           <div class="rc-item" style="border-top:1px solid rgba(0,0,0,0.15);margin-top:6px;padding-top:6px;">Card cuts owed to riders (<span id="rev-rider-pct">90</span>%): <span id="rev-owed-riders" style="color:#1a6b3c;font-weight:700;">₦0</span></div>
           <div class="rc-item">Cash cuts + subs owed to you: <span id="rev-owed-you" style="color:#1a6b3c;font-weight:700;">₦0</span></div>
           <div class="rc-item" style="border-top:1px solid rgba(0,0,0,0.15);margin-top:6px;padding-top:6px;font-weight:800;">Net position this week: <span id="rev-net-position" style="font-weight:900;">₦0</span></div>
@@ -2106,6 +2129,8 @@ function loadPricing(){
   const _mDel  = document.getElementById('market_delivery_fee');
   if(_mShop && p.market_shopping_fee!==undefined) _mShop.value = p.market_shopping_fee;
   if(_mDel  && p.market_delivery_fee!==undefined)  _mDel.value  = p.market_delivery_fee;
+  const _mktComm = document.getElementById('marketplace_commission_pct');
+  if(_mktComm && p.marketplace_commission_pct!==undefined) _mktComm.value = p.marketplace_commission_pct;
 
   loadStateMultiplierGrid();
   loadTaxiZonesList();
@@ -3815,7 +3840,18 @@ function loadRevenue(){
     return s + Math.floor((b.deliveryFee||_defDelFeeRev)*_ownerPct/100);
   }, 0);
 
-  const grandTotal = total + foodCutRev + marketCutRev;
+  // Marketplace shop commission — item-price cut (not delivery-fee), for
+  // completed Markets-tab shop orders. Counted across every payment
+  // method, not cash-only like the two blocks above: nothing else in this
+  // function reads bkData.commission, so there's no double-counting risk
+  // to guard against the way there is for the delivery-fee cuts.
+  const completedMarketplaceBks = bks.filter(b =>
+    b.source==='food_order' && b.vendorCategory==='Marketplace'
+    && (b.rideStatus==='completed' || b.rideStatus==='delivered' || b.isPaid)
+  );
+  const marketplaceCommRev = completedMarketplaceBks.reduce((s,b) => s + (b.commission||0), 0);
+
+  const grandTotal = total + foodCutRev + marketCutRev + marketplaceCommRev;
 
   document.getElementById('rev-total').textContent = '₦'+grandTotal.toLocaleString();
   document.getElementById('rev-card').textContent = '₦'+totalComm.toLocaleString();
@@ -3826,6 +3862,9 @@ function loadRevenue(){
   // Market order cuts line
   const marketRevEl = document.getElementById('rev-market-cut');
   if(marketRevEl) marketRevEl.textContent = '₦'+marketCutRev.toLocaleString()+'  ('+completedMarketBks.length+' cash order'+(completedMarketBks.length!==1?'s':'')+' · delivery fee only)';
+  // Marketplace shop commission line
+  const marketplaceCommEl = document.getElementById('rev-marketplace-comm');
+  if(marketplaceCommEl) marketplaceCommEl.textContent = '₦'+marketplaceCommRev.toLocaleString()+'  ('+completedMarketplaceBks.length+' order'+(completedMarketplaceBks.length!==1?'s':'')+' · '+getMarketplaceCommissionPct()+'% of item price)';
   const _rPctEl = document.getElementById('rev-rider-pct');
   if(_rPctEl) _rPctEl.textContent = getCommCut().rider;
   const _oPctEl = document.getElementById('rev-comm-pct');
@@ -4227,6 +4266,9 @@ window.loadPartnerApps = function(){
     var marketShopLine = (a.hasMarketShop==='Yes')
       ? '<br/>🏪 <strong style="color:var(--green);">Market shop:</strong> '+(a.marketName||'—')+(a.marketLine?' · '+a.marketLine:'')+' · Shop '+(a.marketShopNo||'—')
       : '';
+    var serviceLine = (a.isService==='Yes')
+      ? '<br/>🛠️ <strong style="color:var(--green);">Service provider:</strong> '+(a.serviceCategory||'—')+(a.serviceYears?' · '+a.serviceYears+' experience':'')+'<br/>💬 '+(a.serviceBio||'—')
+      : '';
     return '<div style="background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px;">'
       + '<div style="font-weight:700;font-size:0.85rem;margin-bottom:4px;">'+(a.businessName||'—')+' <span style="font-weight:400;color:var(--muted);font-size:0.7rem;">('+(a.category||'—')+')</span></div>'
       + '<div style="font-size:0.74rem;color:var(--muted);line-height:1.7;">'
@@ -4234,7 +4276,8 @@ window.loadPartnerApps = function(){
       + '📍 '+(a.address||'—')+(a.landmark?' ('+a.landmark+')':'')+'<br/>'
       + '🕐 '+(a.openTime||'—')+' – '+(a.closeTime||'—')+' &nbsp;·&nbsp; 🚚 Has delivery: '+(a.hasDelivery||'—')+'<br/>'
       + '🗺️ Serves: '+areasStr
-      + marketShopLine+'<br/>'
+      + marketShopLine
+      + serviceLine+'<br/>'
       + '📝 '+(a.description||'—')
       + '</div>'
       + '<div style="display:flex;gap:8px;margin-top:10px;">'
@@ -4259,10 +4302,11 @@ function approvePartnerApp(fbKey){
   if(!pin) return;
 
   var isMarketShop = app.hasMarketShop === 'Yes';
-  // Market-shop applicants get partnerType 'shop' so the Partner Portal
-  // shows them a product catalog editor instead of a restaurant menu
-  // editor, once that screen exists (Phase 2 of the marketplace build).
-  var partnerType = isMarketShop ? 'shop'
+  var isService = app.isService === 'Yes';
+  // Priority: service > market shop > restaurant/business — these three
+  // partner types each get a different Partner Portal screen, so pick the
+  // most specific one if an applicant somehow answered Yes to more than one.
+  var partnerType = isService ? 'service' : isMarketShop ? 'shop'
     : (app.category==='Restaurant'||app.category==='Fast Food'||app.category==='Home Kitchen'||app.category==='Small Chops'||app.category==='Bakery'||app.category==='Cake Vendor') ? 'restaurant' : 'business';
   var vendorCategory = (partnerType==='restaurant') ? 'Food' : (app.category==='Supermarket'||app.category==='Grocery Store'||app.category==='Pharmacy') ? 'Groceries' : (app.category==='Fashion') ? 'Fashion' : (app.category==='Electronics') ? 'Electronics' : 'Other';
 
@@ -4272,7 +4316,9 @@ function approvePartnerApp(fbKey){
   });
 
   // 2. Auto-create their Marketplace/Shop vendor record from what they already told us
-  var vendorPromise = (app.marketplace==='Yes' || app.wantDelivery==='Yes')
+  //    (never for service providers — a plumber doesn't belong in the flat
+  //    Food/Shop vendor-card list, which assumes fixed-price cart checkout).
+  var vendorPromise = (!isService && (app.marketplace==='Yes' || app.wantDelivery==='Yes'))
     ? window._push(window._ref(window._db,'restaurants'), {
         name: app.businessName, emoji: '🏪', category: vendorCategory,
         location: app.address, phone: app.phone, deliveryFee: 1000,
@@ -4295,9 +4341,22 @@ function approvePartnerApp(fbKey){
       })
     : Promise.resolve();
 
-  Promise.all([pinPromise, vendorPromise, shopPromise]).then(function(){
+  // 4. Service providers get a record under service_providers/ — a
+  // directory profile (category, bio, portfolio photos, contact buttons),
+  // not a cart/catalog, since service pricing is quote-based and arranged
+  // directly between customer and provider, not paid in-app.
+  var servicePromise = isService
+    ? window._push(window._ref(window._db,'service_providers'), {
+        name: app.businessName, category: app.serviceCategory, yearsExperience: app.serviceYears||'',
+        bio: app.serviceBio, serviceAreas: app.areas||[],
+        ownerName: app.ownerName, phone: app.phone, whatsapp: app.whatsapp||app.phone,
+        pin: pin, status: 'active', photos: {}, created: new Date().toISOString()
+      })
+    : Promise.resolve();
+
+  Promise.all([pinPromise, vendorPromise, shopPromise, servicePromise]).then(function(){
     window._update(window._ref(window._db,'partner_applications/'+fbKey), { status:'approved' });
-    showToast('✅ '+app.businessName+' approved! PIN: '+pin+(isMarketShop?' · Shop added to '+app.marketName:''));
+    showToast('✅ '+app.businessName+' approved! PIN: '+pin+(isMarketShop?' · Shop added to '+app.marketName:'')+(isService?' · Service profile created':''));
   }).catch(function(e){
     showToast('❌ Could not approve: '+e.message);
   });
@@ -4505,6 +4564,15 @@ function saveFoodSettings(){
 function getFoodCut(){
   const s = window.FB_FOOD_SETTINGS || JSON.parse(localStorage.getItem('rn_food_settings')||'{}');
   return { rider: s.riderCut||90, owner: s.ownerCut||10 };
+}
+
+// Marketplace shop commission — separate from getFoodCut() above, which
+// only splits the delivery fee. This is RideNaija's cut of the actual
+// item price for a Market → Line → Shop purchase (set in the Marketplace
+// Shop Commission pricing panel), applied on top of the delivery-fee cut.
+function getMarketplaceCommissionPct(){
+  const p = window.FB_FARE_PRICING || JSON.parse(localStorage.getItem('rn_pricing')||'{}');
+  return p.marketplace_commission_pct!==undefined ? p.marketplace_commission_pct : 5;
 }
 
 function markRestaurantPaid(fbKey, restaurantName, amount){
