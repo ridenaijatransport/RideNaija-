@@ -871,6 +871,76 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
         </div>
       </div>
 
+      <!-- OUTSIDE-SULEJA PRICES (Batch 2.1) -->
+      <div class="pricing-panel">
+        <div class="pp-header">
+          <h3>🌍 Outside-Suleja Delivery Prices</h3>
+          <p>Prices for drop-offs outside Suleja (e.g. Abuja districts). The app never goes below the minimum. If a destination isn't listed here, the customer's booking shows <strong>"price to be confirmed"</strong> and you set the price on the booking.</p>
+        </div>
+        <div class="pp-body">
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
+            <label style="font-size:0.72rem;color:var(--muted);white-space:nowrap;">Minimum fee ₦</label>
+            <input type="number" id="op-min" placeholder="4500" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--text);"/>
+            <button class="save-pricing-btn" style="width:auto;padding:8px 14px;" onclick="saveOutsideMin()">💾 Save</button>
+          </div>
+          <div style="display:flex;gap:6px;margin-bottom:8px;">
+            <input type="text" id="op-city" placeholder="City e.g. Abuja" style="flex:1;min-width:0;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--text);"/>
+            <input type="text" id="op-area" placeholder="Area e.g. Wuse 2 (blank = whole city)" style="flex:1.4;min-width:0;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--text);"/>
+            <input type="number" id="op-fee" placeholder="₦ fee" style="width:90px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--text);"/>
+          </div>
+          <button class="save-pricing-btn" onclick="addOutsidePlace()">➕ Add / Update Price</button>
+          <div id="op-list" style="margin-top:12px;font-size:0.76rem;color:var(--muted);">Loading…</div>
+        </div>
+      </div>
+      <script>
+      (function(){
+        function db(){ return window.fbReady && window._db ? window._db : null; }
+        var data = {};
+        window.renderOutsidePrices = function(){
+          var el = document.getElementById('op-list'); if(!el) return;
+          var keys = Object.keys(data.places||{});
+          if(!keys.length){ el.innerHTML = 'No outside prices yet. Add Abuja areas above.'; return; }
+          el.innerHTML = keys.map(function(k){ var p = data.places[k];
+            return '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);">'
+              + '<span style="color:var(--text);">📍 ' + (p.area||'Whole city') + (p.city?' · '+p.city:'') + '</span>'
+              + '<span><strong style="color:var(--green);">₦' + Number(p.fee||0).toLocaleString() + '</strong> '
+              + '<button onclick="deleteOutsidePlace(\'' + k + '\')" style="margin-left:8px;background:transparent;border:1px solid rgba(255,79,79,0.3);color:#ff4f4f;border-radius:6px;padding:2px 8px;cursor:pointer;">🗑️</button></span></div>';
+          }).join('');
+        };
+        function start(){
+          if(!db()){ setTimeout(start, 800); return; }
+          db().ref('outside_pricing').on('value', function(s){
+            data = s.val() || {};
+            var m = document.getElementById('op-min'); if(m && document.activeElement !== m) m.value = data.minFee || 4500;
+            window.renderOutsidePrices();
+          });
+        }
+        start();
+        window.saveOutsideMin = function(){
+          var v = parseInt(document.getElementById('op-min').value, 10);
+          if(!v || v < 0){ showToast('⚠️ Enter a valid minimum'); return; }
+          db().ref('outside_pricing/minFee').set(v).then(function(){ showToast('✅ Minimum fee saved: ₦' + v.toLocaleString()); });
+        };
+        window.addOutsidePlace = function(){
+          var city = document.getElementById('op-city').value.trim();
+          var area = document.getElementById('op-area').value.trim();
+          var fee = parseInt(document.getElementById('op-fee').value, 10);
+          if(!city && !area){ showToast('⚠️ Enter a city or an area'); return; }
+          if(!fee || fee < 1){ showToast('⚠️ Enter the fee'); return; }
+          var existing = Object.keys(data.places||{}).filter(function(k){ var p = data.places[k]; return (p.area||'').toLowerCase()===area.toLowerCase() && (p.city||'').toLowerCase()===city.toLowerCase(); })[0];
+          var ref = existing ? db().ref('outside_pricing/places/'+existing) : db().ref('outside_pricing/places').push();
+          ref.set({ city: city, area: area, fee: fee }).then(function(){
+            showToast('✅ Price saved — live in the app');
+            document.getElementById('op-area').value = ''; document.getElementById('op-fee').value = '';
+          });
+        };
+        window.deleteOutsidePlace = function(k){
+          if(!confirm('Remove this price?')) return;
+          db().ref('outside_pricing/places/'+k).remove();
+        };
+      })();
+      </script>
+
       <!-- AREA DISTANCE TABLE — defined by owner -->
       <div class="pricing-panel">
         <div class="pp-header">
@@ -2403,6 +2473,11 @@ function loadRiders(){
           placeholder="e.g. Suleja to Minna, Suleja Club to PDP quarters, Zuba to Gwagwalada"
           style="width:100%;background:var(--card);border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.78rem;outline:none;margin-bottom:6px;"
           onfocus="this.style.borderColor='var(--green)'" onblur="this.style.borderColor='var(--border)'"/>
+        <div style="display:flex;gap:6px;margin-bottom:6px;">
+          <input type="text" id="cstate-${i}" value="${r.coverageState||r.state||''}" placeholder="State e.g. Niger" style="flex:1;min-width:0;background:var(--card);border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:0.78rem;outline:none;"/>
+          <input type="text" id="clga-${i}" value="${r.coverageLga||r.lga||''}" placeholder="LGA e.g. Suleja" style="flex:1;min-width:0;background:var(--card);border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:0.78rem;outline:none;"/>
+        </div>
+        <input type="text" id="careas-${i}" value="${r.coverageAreas||''}" placeholder="Areas covered, comma-separated e.g. Madalla, Kwata, Tafa" style="width:100%;background:var(--card);border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:0.78rem;outline:none;margin-bottom:6px;"/>
         <input type="text" id="eta-${i}"
           value="${r.eta||'~5 min'}"
           placeholder="ETA e.g. ~3 min, ~10 min"
@@ -2420,11 +2495,13 @@ function loadRiders(){
 function saveRiderRoutes(i, fbKey){
   const routes = document.getElementById('routes-'+i).value.trim();
   const eta = document.getElementById('eta-'+i).value.trim()||'~5 min';
-  if(!routes){ showToast('⚠️ Enter at least one route'); return; }
+  const _g=(id)=>{ const e=document.getElementById(id+i); return e?e.value.trim():''; };
+  const coverageState=_g('cstate-'), coverageLga=_g('clga-'), coverageAreas=_g('careas-');
+  if(!routes && !coverageAreas){ showToast('⚠️ Enter a route or the areas this rider covers'); return; }
 
   // Update in Firebase
   if(window.fbReady && window._db && fbKey){
-    window._update(window._ref(window._db,'riders/'+fbKey), {routes, eta});
+    window._update(window._ref(window._db,'riders/'+fbKey), {routes, eta, coverageState, coverageLga, coverageAreas});
   }
   // Update in localStorage
   const riders = JSON.parse(localStorage.getItem('rn_v_riders')||'[]');
@@ -3015,6 +3092,15 @@ function loadBookings(){
       : getFoodCut();
     const foodRiderShare = isFoodOrMktOrder ? Math.floor(foodDelivFee * _foodCut.rider / 100) : 0;
     const foodOwnerCut  = isFoodOrMktOrder ? Math.floor(foodDelivFee * _foodCut.owner / 100) : 0;
+    // Marketplace shop orders (vendorCategory==='Marketplace') carry an
+    // extra item-price commission on top of the delivery-fee cut above —
+    // what the vendor is actually owed is subtotal MINUS that commission,
+    // not the full subtotal. b.vendorPayout/b.commission are set at
+    // checkout time in finalizeFoodOrder(); fall back to the full
+    // subtotal for older orders placed before this existed.
+    const isMarketplaceOrder = b.vendorCategory === 'Marketplace';
+    const marketplaceCommission = isMarketplaceOrder ? (b.commission||0) : 0;
+    const vendorPayout = isMarketplaceOrder ? (b.vendorPayout!==undefined ? b.vendorPayout : foodSubtotal) : foodSubtotal;
 
     // Food order status labels
     if(isFoodOrder){
@@ -3032,7 +3118,7 @@ function loadBookings(){
     <div class="bk-item" style="${isFoodOrder?'border-color:rgba(249,115,22,0.35);':'' }">
       <div class="bk-top">
         <span style="font-size:0.6rem;font-weight:700;color:${statusColor};">${statusLabel}</span>
-        ${isFoodOrder?'<span style="font-size:0.6rem;font-weight:700;background:rgba(249,115,22,0.15);color:#f97316;padding:2px 7px;border-radius:6px;">🍽️ Food Order</span>':''}
+        ${isFoodOrder?(isMarketplaceOrder?'<span style="font-size:0.6rem;font-weight:700;background:rgba(0,184,101,0.15);color:var(--green);padding:2px 7px;border-radius:6px;">🛍️ Marketplace Order</span>':'<span style="font-size:0.6rem;font-weight:700;background:rgba(249,115,22,0.15);color:#f97316;padding:2px 7px;border-radius:6px;">🍽️ Food Order</span>'):''}
       </div>
       ${isFoodOrder?`
       <div style="background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.2);border-radius:8px;padding:8px;margin-bottom:6px;">
@@ -3040,7 +3126,7 @@ function loadBookings(){
         <div style="font-size:0.68rem;color:var(--muted);margin-bottom:5px;">📦 ${(b.items||'').slice(0,100)}${(b.items||'').length>100?'...':''}</div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;font-size:0.68rem;text-align:center;">
           <div style="background:var(--card2);border-radius:7px;padding:5px;">
-            <div style="color:var(--muted);">Food Subtotal</div>
+            <div style="color:var(--muted);">${isMarketplaceOrder?'Items Subtotal':'Food Subtotal'}</div>
             <div style="font-weight:700;color:var(--text);">₦${foodSubtotal.toLocaleString()}</div>
           </div>
           <div style="background:var(--card2);border-radius:7px;padding:5px;">
@@ -3053,9 +3139,10 @@ function loadBookings(){
           </div>
         </div>
         <div style="margin-top:6px;background:rgba(255,214,64,0.06);border:1px solid rgba(255,214,64,0.15);border-radius:7px;padding:6px 8px;font-size:0.67rem;line-height:1.7;">
-          💡 <strong style="color:var(--yellow);">Restaurant payment:</strong> ₦${foodSubtotal.toLocaleString()} belongs to <strong>${b.restaurantName||'restaurant'}</strong> — pay them after delivery.<br/>
+          💡 <strong style="color:var(--yellow);">${isMarketplaceOrder?'Vendor payment':'Restaurant payment'}:</strong> ₦${vendorPayout.toLocaleString()} belongs to <strong>${b.restaurantName||(isMarketplaceOrder?'shop':'restaurant')}</strong> — pay them after delivery.<br/>
           🏍️ <strong style="color:var(--green);">Rider gets:</strong> ₦${foodRiderShare.toLocaleString()} (${_foodCut.rider}% of ₦${foodDelivFee.toLocaleString()} delivery fee)<br/>
-          💰 <strong style="color:var(--text);">Your cut:</strong> ₦${foodOwnerCut.toLocaleString()} (${_foodCut.owner}% of delivery fee)
+          💰 <strong style="color:var(--text);">Your delivery cut:</strong> ₦${foodOwnerCut.toLocaleString()} (${_foodCut.owner}% of delivery fee)${isMarketplaceOrder?`<br/>
+          🏪 <strong style="color:var(--text);">Your marketplace commission:</strong> ₦${marketplaceCommission.toLocaleString()} (${b.commissionPct!==undefined?b.commissionPct:getMarketplaceCommissionPct()}% of items subtotal)`:''}
         </div>
       </div>
       `:''}
@@ -3081,6 +3168,8 @@ function loadBookings(){
         <span>📞 ${b.phone||'—'}</span>
         <span>🕐 ${b.time||'—'}</span>
       </div>
+      ${b.itemPhotoUrl?`<a href="${b.itemPhotoUrl}" target="_blank" rel="noopener" style="display:block;margin-top:6px;"><img src="${b.itemPhotoUrl}" alt="Item photo" style="max-width:100%;max-height:150px;border-radius:9px;border:1px solid var(--border);"/><div style="font-size:0.6rem;color:var(--muted);margin-top:2px;">📷 Customer's item photo — tap to enlarge</div></a>`:''}
+      ${(b.feePending&&!(b.fare>0))||(b.minFee>0)?`<div style="margin-top:6px;background:${b.feePending&&!(b.fare>0)?'rgba(255,214,64,0.08)':'rgba(0,184,101,0.06)'};border:1px solid ${b.feePending&&!(b.fare>0)?'rgba(255,214,64,0.3)':'rgba(0,184,101,0.25)'};border-radius:9px;padding:8px;"><div style="font-size:0.66rem;color:${b.feePending&&!(b.fare>0)?'var(--yellow)':'var(--green)'};font-weight:700;margin-bottom:5px;">${b.feePending&&!(b.fare>0)?'⚠️ Outside Suleja — set the delivery price (minimum ₦'+(b.minFee||4500).toLocaleString()+') before assigning a rider':'💰 Outside-Suleja price: ₦'+(b.fare||0).toLocaleString()+' — you can change it any time (even after delivery)'}</div><div style="display:flex;gap:6px;"><input id="setfee-${b.fbKey||b.id||''}" type="number" placeholder="₦ price" style="flex:1;padding:6px 8px;background:var(--card);border:1px solid var(--border);border-radius:7px;font-size:0.72rem;color:var(--text);"/><button onclick="setPendingFee('${b.fbKey||b.id||''}')" style="padding:6px 12px;background:var(--green);border:none;border-radius:7px;font-weight:700;font-size:0.7rem;color:#000;cursor:pointer;">${b.feePending&&!(b.fare>0)?'Set price':'Change'}</button></div></div>`:''}
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
         <div style="font-size:0.58rem;color:rgba(107,143,118,0.4);">ID: ${b.id||b.fbKey||'BK'}</div>
         <button onclick="deleteRecord('bookings','${b.fbKey||b.id||''}','booking')" style="padding:2px 8px;background:transparent;border:1px solid rgba(255,79,79,0.2);border-radius:5px;font-size:0.62rem;color:rgba(255,79,79,0.55);cursor:pointer;font-family:'Syne',sans-serif;font-weight:700;">🗑️ Delete</button>
@@ -3110,26 +3199,23 @@ function loadBookings(){
                   _busyPhones.has((r.phone||'').replace(/\s/g,''));
               }
               function areaScore(r){
-                const rc=(r.city||'').toLowerCase();
-                const rs2=(r.state||'').toLowerCase();
-                // 1) City matches pickup text (highest priority)
-                if(rc && bPickup.includes(rc)) return 3;
-                // 2) State matches restaurant state
-                if(bState && rs2===bState) return 2;
-                // 3) City appears in restaurant state string (e.g. "Niger state" contains city name)
-                if(rc && bState.includes(rc)) return 1;
+                // Zone-first: 3 = covers this area, 2 = same LGA, 1 = same state
+                const w=(t)=>String(t||'').toLowerCase().trim();
+                const areas=[r.coverageAreas,r.area,r.city].join(',').split(/[,;]/).map(w).filter(Boolean);
+                if(areas.some(a=>bPickup.includes(a))) return 3;
+                const lga=w(r.coverageLga||r.lga); if(lga && bPickup.includes(lga)) return 2;
+                const st=w(r.coverageState||r.state); if(st && (bPickup.includes(st)||(bState && st===bState))) return 1;
                 return 0;
               }
+              function isOn(r){ const p=(window.FB_RIDER_PRESENCE||{})[r.fbKey]; return !!(p && p.online===true); }
               const sorted = [...allR].sort((a,rv)=>{
                 const busy_a=isBusy(a), busy_rv=isBusy(rv);
                 // Busy riders always go to bottom
                 if(busy_a&&!busy_rv) return 1;
                 if(busy_rv&&!busy_a) return -1;
-                // Area score for food orders
-                if(isFoodOrder){
-                  const sa=areaScore(a), sr=areaScore(rv);
-                  if(sa!==sr) return sr-sa;
-                }
+                // Online riders first, then zone-first (all booking types)
+                { const oa=isOn(a), orv=isOn(rv); if(oa!==orv) return oa?-1:1; }
+                { const sa=areaScore(a), sr=areaScore(rv); if(sa!==sr) return sr-sa; }
                 const at=(a.vehicleType||a.type||'').toLowerCase();
                 const rt=(rv.vehicleType||rv.type||'').toLowerCase();
                 if(isTaxi){ if(at==='taxi'&&rt!=='taxi') return -1; if(rt==='taxi'&&at!=='taxi') return 1; }
@@ -3139,8 +3225,8 @@ function loadBookings(){
               });
               return sorted.map(r=>{
                 const busy = isBusy(r);
-                const score = isFoodOrder ? areaScore(r) : 0;
-                const areaTag = score===3?' ✓ same city':score>=1?' ✓ same area':'';
+                const score = areaScore(r);
+                const areaTag = (isOn(r)?' 🟢 ONLINE':' ⚪ offline')+(score===3?' ✓ in this area':score===2?' ✓ same LGA':score===1?' ✓ same state':'');
                 const busyTag = busy?' 🔴 BUSY':'';
                 const label=(r.name||'?')+' ('+(r.vehicleType||r.type||'?')+') '+(r.plate?'· '+r.plate:'')+(r.phone?' ···'+r.phone.slice(-4):'')+(r.city?' 📍'+r.city:'')+areaTag+busyTag;
                 return '<option value="'+(r.fbKey||r.id||'')+'" data-name="'+(r.name||'')+'" data-phone="'+(r.phone||'')+'">'+label+'</option>';
@@ -3174,7 +3260,12 @@ function confirmRideComplete(bookingId){
     const bk = (window.FB_BOOKINGS||[]).find(b=>(b.fbKey||b.id)===bookingId);
     if(bk && bk.source==='food_order'){
       const _fCut = getFoodCut();
-      const payableAmt = bk.subtotal||0;
+      // Marketplace shop orders owe the vendor subtotal MINUS the
+      // marketplace commission, not the full subtotal — vendorPayout is
+      // set at checkout in finalizeFoodOrder(); older orders without it
+      // fall back to the raw subtotal (pre-commission orders).
+      const _isMktOrder = bk.vendorCategory === 'Marketplace';
+      const payableAmt = (_isMktOrder && bk.vendorPayout!==undefined) ? bk.vendorPayout : (bk.subtotal||0);
       const payRecord = {
         restaurantName: bk.restaurantName||'Unknown',
         restaurantPhone: bk.restaurantPhone||'',
@@ -3183,6 +3274,7 @@ function confirmRideComplete(bookingId){
         deliveryFee: bk.deliveryFee||500,
         riderShare: Math.floor((bk.deliveryFee||500)*_fCut.rider/100),
         ownerCut: Math.floor((bk.deliveryFee||500)*_fCut.owner/100),
+        marketplaceCommission: _isMktOrder ? (bk.commission||0) : 0,
         payMethod: bk.payMethod||'cash',
         customerPhone: bk.phone||'',
         paid: false,
@@ -4080,6 +4172,15 @@ function loadRevenue(){
   loadRiderSubTable();
 }
 
+function setPendingFee(bookingKey){
+  const el = document.getElementById('setfee-'+bookingKey);
+  const v = el ? parseInt(el.value, 10) : 0;
+  if(!v || v < 1){ showToast('⚠️ Enter the price'); return; }
+  if(!confirm('Set the delivery price to ₦'+v.toLocaleString()+'?')) return;
+  window._update(window._ref(window._db,'bookings/'+bookingKey), { fare:v, deliveryFee:v, feePending:false, feeConfirmedAt:new Date().toISOString() });
+  showToast('✅ Price set — the customer sees it now');
+}
+
 function assignRiderToBooking(bookingKey, selectId){
   const sel = document.getElementById(selectId);
   if(!sel||!sel.value){ showToast('⚠️ Select a rider first'); return; }
@@ -4087,6 +4188,8 @@ function assignRiderToBooking(bookingKey, selectId){
   const riderName  = opt.getAttribute('data-name')||opt.text.split(' · ')[0];
   const riderPhone = opt.getAttribute('data-phone')||'';
   const riderKey   = sel.value;
+  { const _pb = window.FB_BOOKINGS ? window.FB_BOOKINGS.find(b=>b.fbKey===bookingKey||b.id===bookingKey) : null;
+    if(_pb && _pb.feePending && !(_pb.fare>0)){ showToast('⚠️ Set the delivery price first (outside Suleja)'); return; } }
   if(!confirm('Assign '+riderName+' to this booking?')) return;
   // Find booking to detect if it's a food order
   const bkObj = window.FB_BOOKINGS ? window.FB_BOOKINGS.find(b=>b.fbKey===bookingKey||b.id===bookingKey) : null;
@@ -4494,14 +4597,17 @@ function syncMissingPayables(){
   let count = 0;
   completedFood.forEach(b=>{
     const key = b.fbKey||b.id;
+    const _isMktOrderSync = b.vendorCategory === 'Marketplace';
+    const payableAmtSync = (_isMktOrderSync && b.vendorPayout!==undefined) ? b.vendorPayout : (b.subtotal||0);
     const payRecord = {
       restaurantName: b.restaurantName||'Unknown',
       restaurantPhone: b.restaurantPhone||'',
       orderId: key,
-      foodSubtotal: b.subtotal||0,
+      foodSubtotal: payableAmtSync,
       deliveryFee: b.deliveryFee||500,
       riderShare: Math.floor((b.deliveryFee||500)*_fCut.rider/100),
       ownerCut: Math.floor((b.deliveryFee||500)*_fCut.owner/100),
+      marketplaceCommission: _isMktOrderSync ? (b.commission||0) : 0,
       payMethod: b.payMethod||'cash',
       customerPhone: b.phone||'',
       paid: false,

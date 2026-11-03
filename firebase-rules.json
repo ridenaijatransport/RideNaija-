@@ -37,6 +37,7 @@
     "counters":                  { ".read": true, ".write": true },
     "partner_applications":      { ".read": true, ".write": true },
     "area_pairs":                { ".read": true, ".write": true },
+    "outside_pricing":           { ".read": true, ".write": true },
     "shops":                     { ".read": true, ".write": true },
     "service_providers":         { ".read": true, ".write": true }
   }

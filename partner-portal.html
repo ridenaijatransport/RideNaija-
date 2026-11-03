@@ -322,8 +322,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     <div class="ptabs">
       <button class="ptab active" id="ptab-ride" onclick="switchPTab('ride',this)">🚗 Ride</button>
       <button class="ptab" id="ptab-delivery" onclick="switchPTab('delivery',this)">📦 Delivery</button>
-      <button class="ptab" id="ptab-orders" onclick="switchPTab('orders',this)">🍽️ Orders <span id="ptab-orders-badge" style="display:none;background:#f97316;color:#fff;border-radius:10px;padding:1px 6px;font-size:0.6rem;margin-left:2px;">0</span></button>
-      <button class="ptab" id="ptab-menu" onclick="switchPTab('menu',this)">📋 Menu</button>
+      <button class="ptab" id="ptab-orders" onclick="switchPTab('orders',this)">📦 Orders <span id="ptab-orders-badge" style="display:none;background:#f97316;color:#fff;border-radius:10px;padding:1px 6px;font-size:0.6rem;margin-left:2px;">0</span></button>
+      <button class="ptab" id="ptab-menu" style="display:none;" onclick="switchPTab('menu',this)">📋 Menu</button>
       <button class="ptab" id="ptab-shop" style="display:none;" onclick="switchPTab('shop',this)">🏪 My Shop</button>
       <button class="ptab" id="ptab-service" style="display:none;" onclick="switchPTab('service',this)">🛠️ My Profile</button>
       <button class="ptab" id="ptab-history" onclick="switchPTab('history',this)">📋 History</button>
@@ -476,13 +476,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     <div class="panel" id="pp-orders">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
         <div>
-          <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:0.92rem;">🍽️ Incoming Food Orders</div>
+          <div id="pp-orders-heading" style="font-family:'Syne',sans-serif;font-weight:800;font-size:0.92rem;">📦 Incoming Orders</div>
           <div id="food-orders-total" style="font-size:0.62rem;color:var(--muted);margin-top:2px;">Loading...</div>
         </div>
         <button onclick="loadFoodOrders()" style="padding:5px 10px;background:var(--card);border:1px solid var(--border);border-radius:7px;font-size:0.7rem;color:var(--muted);cursor:pointer;font-family:'DM Sans',sans-serif;">🔄 Refresh</button>
       </div>
       <div style="background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.2);border-radius:11px;padding:11px;margin-bottom:12px;font-size:0.71rem;color:var(--muted);line-height:1.7;">
-        💡 These are orders customers placed from the RideNaija app for your restaurant. When you confirm, a WhatsApp receipt goes to the customer and a delivery rider is dispatched by RideNaija.
+        💡 These are orders customers placed from the RideNaija app. When you confirm, a WhatsApp receipt goes to the customer and a delivery rider is dispatched by RideNaija.
       </div>
       <div id="pp-orders-list"><div style="text-align:center;padding:20px;color:var(--muted);font-size:0.78rem;">Loading orders...</div></div>
     </div>
@@ -713,6 +713,15 @@ function showDashboard(){
   if(shopTabBtn) shopTabBtn.style.display = (currentPartner.type==='shop') ? 'inline-block' : 'none';
   var serviceTabBtn = document.getElementById('ptab-service');
   if(serviceTabBtn) serviceTabBtn.style.display = (currentPartner.type==='service') ? 'inline-block' : 'none';
+  // Menu tab only applies to restaurant/business partners (it manages
+  // their restaurants/ vendor-card entry) — shop and service partners
+  // manage their catalog/profile through their own dedicated tabs instead.
+  var menuTabBtn = document.getElementById('ptab-menu');
+  if(menuTabBtn) menuTabBtn.style.display = (currentPartner.type==='shop' || currentPartner.type==='service') ? 'none' : 'inline-block';
+  // "Orders" panel heading — only restaurants are "preparing food"; every
+  // other vendor type (shop, business) is just fulfilling an order.
+  var ordersHeading = document.getElementById('pp-orders-heading');
+  if(ordersHeading) ordersHeading.textContent = (currentPartner.type==='restaurant') ? '🍽️ Incoming Food Orders' : '📦 Incoming Orders';
   loadStats();
   loadHistory();
   // Pre-fill vendor name in delivery form
@@ -1464,8 +1473,11 @@ function renderFoodOrdersList(){
   // Update total count
   var totalEl = document.getElementById('food-orders-total');
   if(totalEl) totalEl.textContent = orders.length + ' order' + (orders.length!==1?'s':'') + ' total';
+  var _isShop = currentPartner && currentPartner.type==='shop';
   if(!orders.length){
-    el.innerHTML='<div style="text-align:center;padding:24px;color:var(--muted);font-size:0.78rem;">No food orders yet.<br/>When customers order from your menu in the RideNaija app, they appear here instantly.</div>';
+    el.innerHTML = _isShop
+      ? '<div style="text-align:center;padding:24px;color:var(--muted);font-size:0.78rem;">No orders yet.<br/>When customers buy from your shop in the RideNaija app, they appear here instantly.</div>'
+      : '<div style="text-align:center;padding:24px;color:var(--muted);font-size:0.78rem;">No food orders yet.<br/>When customers order from your menu in the RideNaija app, they appear here instantly.</div>';
     return;
   }
 
@@ -1481,7 +1493,7 @@ function renderFoodOrdersList(){
     var isDelivering = rs==='delivering'||rs==='completed';
     var isRejected = rs==='rejected'||o.status==='cancelled';
     var statusColor = isPending?'var(--yellow)':isPreparing?'#f97316':isDelivering?'var(--green)':isRejected?'var(--red)':'var(--muted)';
-    var statusLabel = isPending?'🔔 New — Awaiting Confirmation':isPreparing?'👨‍🍳 Preparing':isDelivering?'🏍️ Out for Delivery / Delivered':isRejected?'✕ Rejected':'📋 '+rs;
+    var statusLabel = isPending?'🔔 New — Awaiting Confirmation':isPreparing?(o.foodReady?'✅ Packed — Ready for Pickup':(_isShop?'📦 Packing':'👨‍🍳 Preparing')):isDelivering?'🏍️ Out for Delivery / Delivered':isRejected?'✕ Rejected':'📋 '+rs;
     var subtotal = (o.subtotal||0).toLocaleString();
     var delivFee = (o.deliveryFee||500).toLocaleString();
     var total = (o.fare||0).toLocaleString();
@@ -1496,7 +1508,7 @@ function renderFoodOrdersList(){
       +'<div style="font-size:0.7rem;color:var(--muted);margin-bottom:2px;">📍 <strong style="color:var(--text);">'+( o.destination||'—')+'</strong></div>'
       +'<div style="font-size:0.7rem;color:var(--muted);margin-bottom:8px;">📞 '+(o.phone||'—')+' &nbsp;·&nbsp; 💳 '+(o.payMethod||'Cash')+'</div>'
       +'<div style="background:var(--card);border-radius:8px;padding:8px;margin-bottom:'+(isPending?'10':'4')+'px;font-size:0.72rem;">'
-      +'<div style="display:flex;justify-content:space-between;margin-bottom:2px;"><span style="color:var(--muted);">Food subtotal</span><span>₦'+subtotal+'</span></div>'
+      +'<div style="display:flex;justify-content:space-between;margin-bottom:2px;"><span style="color:var(--muted);">'+(_isShop?'Items subtotal':'Food subtotal')+'</span><span>₦'+subtotal+'</span></div>'
       +'<div style="display:flex;justify-content:space-between;margin-bottom:2px;"><span style="color:var(--muted);">Delivery fee</span><span>₦'+delivFee+'</span></div>'
       +'<div style="display:flex;justify-content:space-between;font-family:\'Syne\',sans-serif;font-weight:800;"><span style="color:var(--green);">Total</span><span style="color:var(--green);">₦'+total+'</span></div>'
       +'</div>'
@@ -1505,7 +1517,9 @@ function renderFoodOrdersList(){
           +'<button onclick="confirmFoodOrder(\''+o.fbKey+'\',\''+encodeURIComponent(o.phone||'')+'\',\''+encodeURIComponent(items)+'\',\''+encodeURIComponent(o.destination||'')+'\','+o.fare+')" style="padding:10px;background:var(--green);border:none;border-radius:9px;font-family:\'Syne\',sans-serif;font-weight:800;font-size:0.78rem;color:#000;cursor:pointer;">✅ Confirm Order</button>'
           +'<button onclick="rejectFoodOrder(\''+o.fbKey+'\')" style="padding:10px;background:rgba(255,79,79,0.1);border:1px solid rgba(255,79,79,0.3);border-radius:9px;font-family:\'Syne\',sans-serif;font-weight:800;font-size:0.78rem;color:var(--red);cursor:pointer;">✕ Reject</button>'
           +'</div>'
-        : '')
+        : (isPreparing && !o.foodReady
+          ? '<button onclick="markOrderReady(\''+o.fbKey+'\')" style="width:100%;padding:10px;background:var(--green);border:none;border-radius:9px;font-family:\'Syne\',sans-serif;font-weight:800;font-size:0.78rem;color:#000;cursor:pointer;margin-top:4px;">✅ '+(_isShop?'Order Packed':'Food Ready')+' — Call the Rider</button>'
+          : ''))
       +'</div>';
   }
 
@@ -1546,9 +1560,13 @@ function confirmFoodOrder(fbKey, encPhone, encItems, encAddr, total){
     })
   }).catch(function(){});
 
-  // WhatsApp to customer confirming
-  var msg = '✅ *Your food order is confirmed!*\n'
-    +'🏪 '+currentPartner.name+' is preparing your order now.\n'
+  // WhatsApp to customer confirming — wording depends on who's actually
+  // fulfilling this: a restaurant "prepares" food, a market shop "packs"
+  // an order. currentPartner.type already tells us which, since whoever
+  // is tapping Confirm here is the vendor fulfilling it.
+  var _isShopOrder = currentPartner.type === 'shop';
+  var msg = (_isShopOrder ? '✅ *Your order is confirmed!*\n' : '✅ *Your food order is confirmed!*\n')
+    +'🏪 '+currentPartner.name+(_isShopOrder ? ' is packing your order now.\n' : ' is preparing your order now.\n')
     +'📦 Items: '+items+'\n'
     +'📍 Delivering to: '+addr+'\n'
     +'💰 Total: ₦'+(total||0).toLocaleString()+'\n'
@@ -1557,6 +1575,29 @@ function confirmFoodOrder(fbKey, encPhone, encItems, encAddr, total){
   var waUrl = 'https://wa.me/'+phone.replace(/^0/,'234')+'?text='+encodeURIComponent(msg);
   showToast('✅ Order confirmed! Customer notified.');
   setTimeout(function(){ window.open(waUrl,'_blank'); }, 400);
+}
+
+function markOrderReady(fbKey){
+  if(!window.fbReady || !window._db){ showToast('⚠️ Not connected yet'); return; }
+  if(!confirm('Mark this order as packed and ready for the rider to pick up?')) return;
+  window._db.ref('bookings/'+fbKey).once('value').then(function(snap){
+    var o = snap.val() || {};
+    window._db.ref('bookings/'+fbKey).update({ foodReady:true, readyAt:new Date().toISOString(), readyBy: currentPartner.name });
+    var line = currentPartner.name + ' → ' + (o.destination||'customer');
+    var riderKey = o.ridersNodeKey || o.riderFbKey || o.companyRiderKey || '';
+    if(riderKey){
+      window._db.ref('fcm_tokens/riders/'+riderKey).once('value').then(function(t){
+        var tok = t.val();
+        if(tok && tok.token){
+          fetch('/api/send-notification', { method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ token: tok.token, title: '📦 Order ready — go pick it up!', body: line, data:{ link:'/rider-portal.html', bookingId: fbKey } }) }).catch(function(){});
+        }
+      });
+    }
+    fetch('/api/send-notification', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ adminBroadcast:true, title: riderKey ? '📦 Order packed — rider can go' : '📦 Order packed — NO RIDER YET', body: line, data:{ link:'/admin.html', bookingId: fbKey } }) }).catch(function(){});
+    showToast(riderKey ? '✅ Rider notified — order is ready' : '✅ Marked ready — admin notified to send a rider');
+  });
 }
 
 function rejectFoodOrder(fbKey){
