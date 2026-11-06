@@ -1032,6 +1032,10 @@ function bookingCard(b,isActive){
   return `<div class="booking-card">
     <div class="bc-top"><span class="bc-id">${b.fbKey||'BK'}</span><span class="bc-status ${isActive?'st-new':'st-done'}">${isActive?'Active':'Completed'}</span></div>
     <div class="bc-route">📍 ${b.pickup||'—'} → 🎯 ${b.destination||'—'}</div>
+    ${b.foodReady?'<div style="background:rgba(0,184,101,0.12);border:1px solid var(--green);border-radius:9px;padding:8px 10px;margin-bottom:8px;font-size:0.74rem;font-weight:700;color:var(--green);">📦 Order is packed — go and pick it up now</div>':''}
+    ${b.feePending?'<div style="background:rgba(255,214,64,0.1);border:1px solid rgba(255,214,64,0.4);border-radius:9px;padding:8px 10px;margin-bottom:8px;font-size:0.72rem;color:var(--yellow);font-weight:700;">⚠️ Delivery price not set yet (outside Suleja) — RideNaija will confirm it with the customer</div>':''}
+    ${b.items?'<div style="background:var(--card2);border-radius:9px;padding:8px 10px;margin-bottom:8px;font-size:0.72rem;white-space:pre-wrap;">🧾 <strong>Items:</strong> '+b.items+(b.itemsBudget?'<br>💰 <strong>Item budget:</strong> ₦'+Number(b.itemsBudget).toLocaleString():'')+'</div>':''}
+    ${b.itemPhotoUrl?'<a href="'+b.itemPhotoUrl+'" target="_blank" rel="noopener" style="display:block;margin-bottom:8px;"><img src="'+b.itemPhotoUrl+'" alt="Item photo" style="max-width:100%;max-height:160px;border-radius:9px;border:1px solid var(--border);"/><div style="font-size:0.6rem;color:var(--muted);margin-top:2px;">📷 Customer\'s item photo — tap to enlarge</div></a>':''}
     <div class="fare-box">
       <div class="fare-label">💰 ${isCash?'Collect from customer':'Owner will pay you'}</div>
       <div class="fare-amount">₦${riderOwed.toLocaleString()}</div>
@@ -1531,7 +1535,15 @@ function startRiderTracking(bookingId, customerPhone){
   }).catch(()=>{});
 
   // Mark booking as rider_accepted in Firebase
-  db.ref('bookings/'+bookingId).update({ rideStatus: 'rider_on_way' }).catch(()=>{});
+  // Food / shop / errand orders keep their own status (preparing…) so the vendor portal and customer app stay correct
+  db.ref('bookings/'+bookingId).once('value').then(function(_s){
+    var _bk=_s.val()||{};
+    if(_bk.source==='food_order'||_bk.source==='market_order'||_bk.type==='market'){
+      db.ref('bookings/'+bookingId).update({ riderOnWay:true, riderOnWayAt:new Date().toISOString() });
+    } else {
+      db.ref('bookings/'+bookingId).update({ rideStatus: 'rider_on_way' });
+    }
+  }).catch(()=>{});
 
   // Send WhatsApp to customer notifying them
   if(customerPhone){

@@ -1489,8 +1489,10 @@ function renderFoodOrdersList(){
     var timeStr = o.time ? new Date(o.time).toLocaleString('en-NG',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '—';
     var rs = o.rideStatus||'';
     var isPending = rs==='pending'||(!rs&&o.status==='active');
-    var isPreparing = rs==='preparing';
-    var isDelivering = rs==='delivering'||rs==='completed';
+    // 'rider_on_way' / 'delivering' are set by rider/admin BEFORE pickup — until the vendor taps Packed (or the rider has the order) it is still being prepared
+    var _riderHas = o.deliveryStage==='picked_up'||o.deliveryStage==='in_transit'||o.deliveryStage==='delivered';
+    var isPreparing = rs==='preparing'||((rs==='rider_on_way'||rs==='delivering')&&!_riderHas&&!o.foodReady&&rs!=='completed')||(o.foodReady&&!_riderHas&&rs!=='completed'&&rs!=='rejected');
+    var isDelivering = !isPreparing&&(rs==='delivering'||rs==='completed'||rs==='rider_on_way');
     var isRejected = rs==='rejected'||o.status==='cancelled';
     var statusColor = isPending?'var(--yellow)':isPreparing?'#f97316':isDelivering?'var(--green)':isRejected?'var(--red)':'var(--muted)';
     var statusLabel = isPending?'🔔 New — Awaiting Confirmation':isPreparing?(o.foodReady?'✅ Packed — Ready for Pickup':(_isShop?'📦 Packing':'👨‍🍳 Preparing')):isDelivering?'🏍️ Out for Delivery / Delivered':isRejected?'✕ Rejected':'📋 '+rs;
@@ -1509,7 +1511,7 @@ function renderFoodOrdersList(){
       +'<div style="font-size:0.7rem;color:var(--muted);margin-bottom:8px;">📞 '+(o.phone||'—')+' &nbsp;·&nbsp; 💳 '+(o.payMethod||'Cash')+'</div>'
       +'<div style="background:var(--card);border-radius:8px;padding:8px;margin-bottom:'+(isPending?'10':'4')+'px;font-size:0.72rem;">'
       +'<div style="display:flex;justify-content:space-between;margin-bottom:2px;"><span style="color:var(--muted);">'+(_isShop?'Items subtotal':'Food subtotal')+'</span><span>₦'+subtotal+'</span></div>'
-      +'<div style="display:flex;justify-content:space-between;margin-bottom:2px;"><span style="color:var(--muted);">Delivery fee</span><span>₦'+delivFee+'</span></div>'
+      +'<div style="display:flex;justify-content:space-between;margin-bottom:2px;"><span style="color:var(--muted);">Delivery fee</span><span>'+(o.feePending?'To be confirmed':'₦'+delivFee)+'</span></div>'
       +'<div style="display:flex;justify-content:space-between;font-family:\'Syne\',sans-serif;font-weight:800;"><span style="color:var(--green);">Total</span><span style="color:var(--green);">₦'+total+'</span></div>'
       +'</div>'
       +(isPending
