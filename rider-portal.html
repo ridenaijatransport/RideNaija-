@@ -1021,7 +1021,22 @@ function bookingCard(b,isActive){
   const timeStr=isNaN(t)?b.time:t.toLocaleDateString('en-NG',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
   const isDeliveryType = b.source==='delivery_partner'||b.source==='market_order'||b.source==='food_order'||b.source==='parcel_intake'||b.source==='delivery_request'||b.type==='market';
   const dStage = b.deliveryStage||'order_placed';
-  const deliveryProgressHtml = (isActive && isDeliveryType) ? `
+  const isErrand = b.source==='market_order'||b.type==='market';
+  const _k = b.fbKey||b.id;
+  const eShop = !!b.shoppingStartedAt, eBought = !!b.boughtAt || dStage==='picked_up' || dStage==='in_transit', eMoving = dStage==='in_transit';
+  const _eb = function(on,ok){ return 'flex:1;padding:10px 4px;border-radius:7px;border:none;font-size:0.7rem;font-weight:700;cursor:'+(ok?'pointer':'not-allowed')+';opacity:'+(ok?'1':'0.45')+';background:'+(on?'var(--green)':'var(--card2)')+';color:'+(on?'#000':'var(--muted)')+';'; };
+  const errandProgressHtml = (isActive && isErrand) ? `
+    <div class="bc-actions" style="margin-top:6px;flex-direction:column;gap:6px;background:rgba(255,159,64,0.07);border:1px solid rgba(255,159,64,0.3);border-radius:9px;padding:10px;">
+      <div style="font-size:0.68rem;color:#ff9f40;font-weight:700;text-align:center;">🛒 Errand: ${eMoving?'🚚 On the way to customer':eBought?'🧾 Items bought':eShop?'🛒 Shopping at the market':'📍 Head to the market'}</div>
+      <div style="display:flex;gap:6px;">
+        <button onclick="updateErrandStage('${_k}','shopping')" style="${_eb(eShop,!eShop)}">🛒 1. Start shopping</button>
+        <button onclick="updateErrandStage('${_k}','bought')" style="${_eb(eBought,eShop&&!eBought)}">🧾 2. Items bought</button>
+        <button onclick="updateErrandStage('${_k}','transit')" style="${_eb(eMoving,eBought&&!eMoving)}">🚚 3. On the way</button>
+      </div>
+      ${b.itemsActual?'<div style="font-size:0.66rem;color:var(--muted);text-align:center;">Spent ₦'+Number(b.itemsActual).toLocaleString()+' of ₦'+Number(b.itemsBudget||0).toLocaleString()+' budget</div>':''}
+      <div style="font-size:0.62rem;color:var(--muted);text-align:center;">The customer is notified at each step. Then tap Mark as Delivered below.</div>
+    </div>` : '';
+  const deliveryProgressHtml = (isActive && isDeliveryType && !isErrand) ? `
     <div class="bc-actions" style="margin-top:6px;flex-direction:column;gap:6px;background:rgba(79,158,255,0.06);border:1px solid rgba(79,158,255,0.2);border-radius:9px;padding:10px;">
       <div style="font-size:0.68rem;color:#4f9eff;font-weight:700;text-align:center;">📦 Delivery Progress: ${dStage==='in_transit'?'🚚 In Transit':dStage==='picked_up'?'📦 Picked Up':'🏷️ Order Placed'}</div>
       <div style="display:flex;gap:6px;">
@@ -1052,6 +1067,7 @@ function bookingCard(b,isActive){
       <span class="bc-chip">🕐 ${timeStr}</span>
     </div>
     ${deliveryProgressHtml}
+    ${errandProgressHtml}
     ${isActive?`<div class="bc-actions">
       <button class="bc-btn btn-call" onclick="window.location.href='tel:${b.phone}'">📞 Call</button>
       <button class="bc-btn btn-wa" onclick="window.open('https://wa.me/${(b.phone||'').replace(/^0/,'234')}?text=${encodeURIComponent('Hello! I am your RideNaija rider, on my way to '+b.pickup+'.')}','_blank')">💬 WhatsApp</button>
@@ -1086,6 +1102,57 @@ function updateDeliveryStage(bookingId, stage){
   db.ref('bookings/'+bookingId).update({ deliveryStage: stage, deliveryStageUpdatedAt: new Date().toISOString() })
     .then(function(){ if(window.showToast) window.showToast(stage==='picked_up' ? '📦 Marked as Picked Up' : '🚚 Marked as In Transit'); })
     .catch(function(){});
+}
+
+// Errand steps (market orders): the rider is the shopper. Uses the same shared
+// deliveryStage values as everything else (bought = picked_up, then in_transit)
+// plus shoppingStartedAt / boughtAt, so the customer app and admin keep working.
+function _notifyCustomerOf(bookingId, title, body){
+  db.ref('bookings/'+bookingId+'/phone').once('value').then(function(snap){
+    const ph = snap.val(); if(!ph) return null;
+    return db.ref('fcm_tokens/customers/'+String(ph).replace(/\D/g,'')).once('value');
+  }).then(function(t){
+    const d = t && t.val();
+    if(d && d.token){
+      fetch('/api/send-notification',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({token:d.token,title:title,body:body,data:{link:'/index.html',bookingId:bookingId}})}).catch(function(){});
+    }
+  }).catch(function(){});
+}
+function updateErrandStage(bookingId, step){
+  if(!bookingId) return;
+  const now = new Date().toISOString();
+  const ref = db.ref('bookings/'+bookingId);
+  if(step==='shopping'){
+    ref.update({ shoppingStartedAt: now }).then(function(){
+      showToast('🛒 Shopping started — customer notified');
+      _notifyCustomerOf(bookingId,'🛒 Shopping started','Your rider is now buying your items at the market.');
+    }).catch(function(){});
+    return;
+  }
+  ref.once('value').then(function(snap){
+    const b = snap.val()||{};
+    if(step==='bought'){
+      if(!b.shoppingStartedAt){ showToast('Tap Start shopping first'); return; }
+      const budget = Number(b.itemsBudget||0);
+      const ans = prompt('Amount you actually spent on the items (₦). Budget was ₦'+budget.toLocaleString()+':', budget||'');
+      if(ans===null) return;
+      const spent = Math.round(Number(String(ans).replace(/[^\d.]/g,'')));
+      if(!spent || spent<=0){ showToast('Enter the amount you spent'); return; }
+      const over = spent - budget;
+      if(budget && over>0 && !confirm('This is ₦'+over.toLocaleString()+' OVER the budget. Have you called the customer and got their approval?')) return;
+      ref.update({ itemsActual: spent, overBudgetBy: (budget&&over>0)?over:0, boughtAt: now, deliveryStage:'picked_up', deliveryStageUpdatedAt: now }).then(function(){
+        showToast('🧾 Items bought — customer notified');
+        _notifyCustomerOf(bookingId,'🧾 Items bought','Your items cost ₦'+spent.toLocaleString()+(budget?' (budget ₦'+budget.toLocaleString()+')':'')+'. Your rider is heading to you.');
+      }).catch(function(){});
+    } else if(step==='transit'){
+      if(!b.boughtAt){ showToast('Tap Items bought first'); return; }
+      ref.update({ deliveryStage:'in_transit', deliveryStageUpdatedAt: now }).then(function(){
+        showToast('🚚 On the way — customer notified');
+        _notifyCustomerOf(bookingId,'🚚 On the way','Your rider is on the way with your items.');
+      }).catch(function(){});
+    }
+  });
 }
 
 function loadPricing(){

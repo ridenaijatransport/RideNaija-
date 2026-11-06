@@ -3168,8 +3168,9 @@ function loadBookings(){
         <span>📞 ${b.phone||'—'}</span>
         <span>🕐 ${b.time||'—'}</span>
       </div>
+      ${b.itemsActual?`<div style="margin-top:6px;font-size:0.72rem;color:var(--muted);">🧾 Rider spent <strong style="color:var(--text);">₦${Number(b.itemsActual).toLocaleString()}</strong> of ₦${Number(b.itemsBudget||0).toLocaleString()} budget${b.overBudgetBy?` · <span style="color:var(--yellow);">over by ₦${Number(b.overBudgetBy).toLocaleString()}</span>`:''}</div>`:''}
       ${b.itemPhotoUrl?`<a href="${b.itemPhotoUrl}" target="_blank" rel="noopener" style="display:block;margin-top:6px;"><img src="${b.itemPhotoUrl}" alt="Item photo" style="max-width:100%;max-height:150px;border-radius:9px;border:1px solid var(--border);"/><div style="font-size:0.6rem;color:var(--muted);margin-top:2px;">📷 Customer's item photo — tap to enlarge</div></a>`:''}
-      ${(b.feePending&&!(b.fare>0))||(b.minFee>0)?`<div style="margin-top:6px;background:${b.feePending&&!(b.fare>0)?'rgba(255,214,64,0.08)':'rgba(0,184,101,0.06)'};border:1px solid ${b.feePending&&!(b.fare>0)?'rgba(255,214,64,0.3)':'rgba(0,184,101,0.25)'};border-radius:9px;padding:8px;"><div style="font-size:0.66rem;color:${b.feePending&&!(b.fare>0)?'var(--yellow)':'var(--green)'};font-weight:700;margin-bottom:5px;">${b.feePending&&!(b.fare>0)?'⚠️ Outside Suleja — set the delivery price (minimum ₦'+(b.minFee||4500).toLocaleString()+') before assigning a rider':'💰 Outside-Suleja price: ₦'+(b.fare||0).toLocaleString()+' — you can change it any time (even after delivery)'}</div><div style="display:flex;gap:6px;"><input id="setfee-${b.fbKey||b.id||''}" type="number" placeholder="₦ price" style="flex:1;padding:6px 8px;background:var(--card);border:1px solid var(--border);border-radius:7px;font-size:0.72rem;color:var(--text);"/><button onclick="setPendingFee('${b.fbKey||b.id||''}')" style="padding:6px 12px;background:var(--green);border:none;border-radius:7px;font-weight:700;font-size:0.7rem;color:#000;cursor:pointer;">${b.feePending&&!(b.fare>0)?'Set price':'Change'}</button></div></div>`:''}
+      ${(b.feePending)||(b.minFee>0)?`<div style="margin-top:6px;background:${b.feePending?'rgba(255,214,64,0.08)':'rgba(0,184,101,0.06)'};border:1px solid ${b.feePending?'rgba(255,214,64,0.3)':'rgba(0,184,101,0.25)'};border-radius:9px;padding:8px;"><div style="font-size:0.66rem;color:${b.feePending?'var(--yellow)':'var(--green)'};font-weight:700;margin-bottom:5px;">${b.feePending?'⚠️ Outside Suleja — set the delivery price (minimum ₦'+(b.minFee||4500).toLocaleString()+') before assigning a rider':'💰 Outside-Suleja price: ₦'+(b.deliveryFee||b.fare||0).toLocaleString()+' — you can change it any time (even after delivery)'}</div><div style="display:flex;gap:6px;"><input id="setfee-${b.fbKey||b.id||''}" type="number" placeholder="₦ price" style="flex:1;padding:6px 8px;background:var(--card);border:1px solid var(--border);border-radius:7px;font-size:0.72rem;color:var(--text);"/><button onclick="setPendingFee('${b.fbKey||b.id||''}')" style="padding:6px 12px;background:var(--green);border:none;border-radius:7px;font-weight:700;font-size:0.7rem;color:#000;cursor:pointer;">${b.feePending?'Set price':'Change'}</button></div></div>`:''}
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
         <div style="font-size:0.58rem;color:rgba(107,143,118,0.4);">ID: ${b.id||b.fbKey||'BK'}</div>
         <button onclick="deleteRecord('bookings','${b.fbKey||b.id||''}','booking')" style="padding:2px 8px;background:transparent;border:1px solid rgba(255,79,79,0.2);border-radius:5px;font-size:0.62rem;color:rgba(255,79,79,0.55);cursor:pointer;font-family:'Syne',sans-serif;font-weight:700;">🗑️ Delete</button>
@@ -4176,8 +4177,20 @@ function setPendingFee(bookingKey){
   const el = document.getElementById('setfee-'+bookingKey);
   const v = el ? parseInt(el.value, 10) : 0;
   if(!v || v < 1){ showToast('⚠️ Enter the price'); return; }
-  if(!confirm('Set the delivery price to ₦'+v.toLocaleString()+'?')) return;
-  window._update(window._ref(window._db,'bookings/'+bookingKey), { fare:v, deliveryFee:v, feePending:false, feeConfirmedAt:new Date().toISOString() });
+  const bk = (window.FB_BOOKINGS||[]).find(b=>b.fbKey===bookingKey||b.id===bookingKey) || {};
+  const upd = { deliveryFee:v, feePending:false, feeConfirmedAt:new Date().toISOString() };
+  if(bk.source==='food_order'){
+    // food / shop order: total = items subtotal + delivery fee
+    upd.fare = (Number(bk.subtotal)||0) + v;
+  } else if(bk.source==='market_order' || bk.type==='market'){
+    // market errand: total = budget + shopping fee + delivery fee; your cut = shopping fee + share of delivery
+    upd.fare = (Number(bk.itemsBudget)||0) + (Number(bk.shoppingFee)||0) + v;
+    upd.commission = (Number(bk.shoppingFee)||0) + Math.floor(v * ((Number(bk.ownerCutPct)||10)/100));
+  } else {
+    upd.fare = v;
+  }
+  if(!confirm('Set the delivery price to ₦'+v.toLocaleString()+'?\nCustomer total becomes ₦'+upd.fare.toLocaleString())) return;
+  window._update(window._ref(window._db,'bookings/'+bookingKey), upd);
   showToast('✅ Price set — the customer sees it now');
 }
 
@@ -4189,7 +4202,7 @@ function assignRiderToBooking(bookingKey, selectId){
   const riderPhone = opt.getAttribute('data-phone')||'';
   const riderKey   = sel.value;
   { const _pb = window.FB_BOOKINGS ? window.FB_BOOKINGS.find(b=>b.fbKey===bookingKey||b.id===bookingKey) : null;
-    if(_pb && _pb.feePending && !(_pb.fare>0)){ showToast('⚠️ Set the delivery price first (outside Suleja)'); return; } }
+    if(_pb && _pb.feePending){ showToast('⚠️ Set the delivery price first (outside Suleja)'); return; } }
   if(!confirm('Assign '+riderName+' to this booking?')) return;
   // Find booking to detect if it's a food order
   const bkObj = window.FB_BOOKINGS ? window.FB_BOOKINGS.find(b=>b.fbKey===bookingKey||b.id===bookingKey) : null;
