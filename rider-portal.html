@@ -1141,7 +1141,13 @@ function updateErrandStage(bookingId, step){
       if(!spent || spent<=0){ showToast('Enter the amount you spent'); return; }
       const over = spent - budget;
       if(budget && over>0 && !confirm('This is ₦'+over.toLocaleString()+' OVER the budget. Have you called the customer and got their approval?')) return;
-      ref.update({ itemsActual: spent, overBudgetBy: (budget&&over>0)?over:0, boughtAt: now, deliveryStage:'picked_up', deliveryStageUpdatedAt: now }).then(function(){
+      const upd = { itemsActual: spent, overBudgetBy: (budget&&over>0)?over:0, boughtAt: now, deliveryStage:'picked_up', deliveryStageUpdatedAt: now };
+      // Cash customers pay what was really spent: keep the total in step (original kept in fareBudgeted).
+      if(String(b.payMethod||'').toLowerCase()==='cash' && !b.feePending){
+        upd.fareBudgeted = b.fare||0;
+        upd.fare = spent + (Number(b.shoppingFee)||0) + (Number(b.deliveryFee)||0);
+      }
+      ref.update(upd).then(function(){
         showToast('🧾 Items bought — customer notified');
         _notifyCustomerOf(bookingId,'🧾 Items bought','Your items cost ₦'+spent.toLocaleString()+(budget?' (budget ₦'+budget.toLocaleString()+')':'')+'. Your rider is heading to you.');
       }).catch(function(){});

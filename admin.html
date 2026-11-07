@@ -4184,7 +4184,7 @@ function setPendingFee(bookingKey){
     upd.fare = (Number(bk.subtotal)||0) + v;
   } else if(bk.source==='market_order' || bk.type==='market'){
     // market errand: total = budget + shopping fee + delivery fee; your cut = shopping fee + share of delivery
-    upd.fare = (Number(bk.itemsBudget)||0) + (Number(bk.shoppingFee)||0) + v;
+    upd.fare = (Number(bk.itemsActual)||Number(bk.itemsBudget)||0) + (Number(bk.shoppingFee)||0) + v;
     upd.commission = (Number(bk.shoppingFee)||0) + Math.floor(v * ((Number(bk.ownerCutPct)||10)/100));
   } else {
     upd.fare = v;
