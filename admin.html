@@ -483,6 +483,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
     <button class="dtab" onclick="switchTab('withdrawals')">💳 Withdrawals</button>
     <button class="dtab" onclick="switchTab('fleet')">🏢 Fleet</button>
     <button class="dtab" onclick="switchTab('partners')">🏨 Partners</button>
+    <button class="dtab" onclick="switchTab('users')">👥 Users</button>
     <button class="dtab" onclick="switchTab('settings')">⚙️ Settings</button>
   </div>
 
@@ -1828,6 +1829,16 @@ Temu | | Chuka Eze | 08059876543 | 5 Ademola St, VI | 800" style="width:100%;pad
       </div>
     </div>
 
+    <div class="tab-panel" id="tab-users">
+      <div class="card" style="padding:14px;">
+        <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:0.95rem;margin-bottom:4px;">👥 App Users</div>
+        <div style="font-size:0.7rem;color:var(--muted);margin-bottom:12px;">Customers are identified by phone number. "Installs" counts phones that opened the native app, even before they enter a number.</div>
+        <div id="users-stats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;"></div>
+        <input type="text" id="users-search" oninput="renderUsers()" placeholder="Search name or phone…" style="width:100%;background:var(--card2);border:1px solid var(--border);border-radius:9px;padding:9px 11px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.8rem;margin-bottom:10px;"/>
+        <div id="users-list"></div>
+      </div>
+    </div>
+
     <div class="tab-panel" id="tab-settings">
       <div style="height:8px;"></div>
       <div class="dash-sec">
@@ -2067,6 +2078,7 @@ function switchTab(name){
   if(name==='riders') loadRiders();
   if(name==='applications') loadApplications();
   if(name==='revenue') { loadRevenue(); setTimeout(loadRiderSubTable, 800); renderDfmRevenue(); }
+  if(name==='users') loadUsers();
   if(name==='settings') loadSettings();
   if(name==='pricing') loadPricing();
 }
@@ -2098,6 +2110,36 @@ function switchPriceTab(name,btn){
 // ══════════════════════════════════════════
 // LOAD ALL
 // ══════════════════════════════════════════
+// ── Users tab (native app records `users` + `app_installs`) ──
+var _USERS=[], _INSTALLS=[];
+function loadUsers(){
+  Promise.all([db.ref('users').once('value'), db.ref('app_installs').once('value')]).then(function(r){
+    var u=r[0].val()||{}, i=r[1].val()||{};
+    _USERS=Object.keys(u).map(function(k){var o=u[k]||{};o._k=k;return o;});
+    _INSTALLS=Object.keys(i).map(function(k){var o=i[k]||{};o._k=k;return o;});
+    renderUsers();
+  }).catch(function(){ document.getElementById('users-list').innerHTML='<div style="color:var(--muted);font-size:0.78rem;">Could not load users.</div>'; });
+}
+function renderUsers(){
+  var now=Date.now(), DAY=86400000, sod=new Date(); sod.setHours(0,0,0,0);
+  var t=function(x){return x?new Date(x).getTime():0;};
+  var today=_USERS.filter(function(u){return t(u.firstSeen)>=sod.getTime();}).length;
+  var wk=_USERS.filter(function(u){return t(u.firstSeen)>=now-7*DAY;}).length;
+  var act=_USERS.filter(function(u){return t(u.lastSeen)>=now-7*DAY;}).length;
+  var instToday=_INSTALLS.filter(function(i){return t(i.firstOpen)>=sod.getTime();}).length;
+  var box=function(n,l,c){return '<div style="background:var(--card2);border-radius:10px;padding:10px;text-align:center;"><div style="font-family:Syne,sans-serif;font-size:1.05rem;font-weight:800;color:'+(c||'var(--text)')+';">'+n+'</div><div style="font-size:0.58rem;color:var(--muted);text-transform:uppercase;margin-top:2px;">'+l+'</div></div>';};
+  document.getElementById('users-stats').innerHTML=box(_USERS.length,'Users (with phone)','var(--green)')+box(today,'New today')+box(wk,'New this week')+box(act,'Active 7 days')+box(_INSTALLS.length,'App installs')+box(instToday,'Installs today');
+  var q=(document.getElementById('users-search').value||'').toLowerCase().trim();
+  var list=_USERS.slice().sort(function(a,b){return t(b.firstSeen)-t(a.firstSeen);}).filter(function(u){return !q||String(u.name||'').toLowerCase().indexOf(q)>-1||String(u.phone||u._k).indexOf(q)>-1;}).slice(0,150);
+  var fmt=function(x){if(!x)return '—';try{return new Date(x).toLocaleString('en-NG',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});}catch(e){return '—';}};
+  document.getElementById('users-list').innerHTML=list.length?list.map(function(u){
+    return '<div style="background:var(--card2);border-radius:10px;padding:10px;margin-bottom:6px;display:flex;justify-content:space-between;gap:8px;align-items:center;">'
+      +'<div style="min-width:0;"><div style="font-weight:700;font-size:0.82rem;">'+(u.name||'(no name)')+'</div><div style="font-size:0.68rem;color:var(--muted);">📞 '+(u.phone||u._k)+(u.area?' · '+u.area:'')+'</div>'
+      +'<div style="font-size:0.62rem;color:var(--muted);">Joined '+fmt(u.firstSeen)+' · last seen '+fmt(u.lastSeen)+'</div></div>'
+      +'<div style="text-align:right;flex-shrink:0;"><div style="font-family:Syne,sans-serif;font-weight:800;color:var(--green);">'+(u.orders||0)+'</div><div style="font-size:0.55rem;color:var(--muted);text-transform:uppercase;">orders</div></div></div>';
+  }).join(''):'<div style="color:var(--muted);font-size:0.78rem;padding:8px;">No users yet.</div>';
+}
+
 function loadAll(){
   loadStats(); loadPricing(); setTimeout(loadSubInputs, 600); loadRiders(); loadApplications(); loadBookings(); loadRevenue(); loadSettings(); loadDedicated(); loadWithdrawals(); loadFleet();
 }
