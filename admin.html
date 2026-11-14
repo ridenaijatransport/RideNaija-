@@ -1418,8 +1418,8 @@ Temu | | Chuka Eze | 08059876543 | 5 Ademola St, VI | 800" style="width:100%;pad
       <div style="background:rgba(79,158,255,0.07);border:1.5px solid rgba(79,158,255,0.2);border-radius:14px;padding:14px;margin-bottom:14px;">
         <div style="font-size:0.82rem;font-weight:800;color:#4f9eff;margin-bottom:8px;">🏢 Company Fleet Management</div>
         <div style="font-size:0.72rem;color:var(--muted);line-height:1.8;">
-          <strong style="color:#4f9eff;">Company riders</strong> use RideNaija vehicles. No weekly subscription. You earn <strong>30%</strong> per ride, rider earns <strong>70%</strong>.<br/>
-          <strong style="color:var(--yellow);">Cash rides</strong> → rider remits your 30% <strong>same evening</strong>.<br/>
+          <strong style="color:#4f9eff;">Company riders</strong> use RideNaija vehicles. No weekly subscription. You and the rider share each ride by the Fleet split below. Riders buy their own fuel.<br/>
+          <strong style="color:var(--yellow);">Cash rides</strong> → rider hands in your share <strong>same evening</strong>.<br/>
           <strong style="color:var(--green);">Card rides</strong> → you pay rider their 70% <strong>every 2 days</strong> (Mon+Tue paid Wed, Wed+Thu paid Fri, Fri+Sat paid Sat).<br/>
           <strong style="color:#4f9eff);">Dedicated subscription fees</strong> → 100% yours. Rider earns only from the individual trip fares.
         </div>
@@ -2689,8 +2689,8 @@ window.refreshBookingsUI = function(){ if(document.getElementById('tab-bookings'
 
 // ══ DEDICATED SUBSCRIPTION SYSTEM ══════════════════════════════
 
-const DED_OWNER_CUT = 0.30; // Owner keeps 30%
-const DED_RIDER_CUT = 0.70; // Rider gets 70%
+Object.defineProperty(window,'DED_RIDER_CUT',{get:function(){return getFleetSettings().riderCut/100;}});
+Object.defineProperty(window,'DED_OWNER_CUT',{get:function(){return getFleetSettings().ownerCut/100;}});
 
 function getDedicatedItems(){
   if(window.FB_DEDICATED && window.FB_DEDICATED.length) return window.FB_DEDICATED;
@@ -4992,7 +4992,7 @@ function loadWithdrawals(){
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
         <div>
           <div style="font-family:'Syne',sans-serif;font-size:0.88rem;font-weight:800;">₦${(w.amount||0).toLocaleString()}</div>
-          <div style="font-size:0.66rem;color:var(--muted);margin-top:2px;">${w.customerName||w.phone||'Customer'} · ${date}</div>
+          <div style="font-size:0.66rem;color:var(--muted);margin-top:2px;">${w.role==='partner'?'🏪 Partner · ':w.role==='rider'?'🏍️ Rider · ':''}${w.customerName||w.phone||'Customer'} · ${date}</div>
         </div>
         <div style="font-size:0.68rem;font-weight:700;padding:3px 9px;border-radius:20px;background:${isPaid?'rgba(0,184,101,0.12)':isRejected?'rgba(255,79,79,0.1)':'rgba(255,214,64,0.12)'};color:${isPaid?'var(--green)':isRejected?'var(--red)':'var(--yellow)'};">
           ${isPaid?'✅ Paid':isRejected?'❌ Rejected':'⏳ Pending'}
